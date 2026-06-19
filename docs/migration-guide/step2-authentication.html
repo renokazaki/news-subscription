@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 2: 認証システム（Devise） | News Picker 移行ガイド</title>
+  <title>Step 2: 認証システム（Devise + JWT） | News Picker 移行ガイド</title>
   <style>
     :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,6 +24,8 @@
     .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
     .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
     .tip-box::before { content: "📝 Tips"; display: block; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .ref-box { background: rgba(139, 92, 246, 0.05); border-left: 4px solid #8b5cf6; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .ref-box::before { content: "📖 深掘り"; display: block; font-weight: 700; color: #8b5cf6; margin-bottom: 0.5rem; font-size: 0.85rem; }
     pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
     code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
     :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
@@ -37,60 +39,123 @@
     .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
     .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
     .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+    .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; white-space: pre; overflow-x: auto; line-height: 1.4; }
   </style>
 </head>
 <body>
   <div class="container">
     <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
 
-    <h1>Step 2: 認証システム（Devise）</h1>
-    <p class="step-meta">所要時間: 1〜2日 | Devise + カスタムトークン認証でAPI認証を構築</p>
+    <h1>Step 2: 認証システム（Devise + JWT）</h1>
+    <p class="step-meta">所要時間: 1〜2日 | devise-jwt でステートレスAPI認証を構築</p>
 
     <div class="goal-box">
       <h3>このStepのゴール</h3>
-      <p>ユーザーがサインアップ・ログイン・ログアウトでき、認証済みのリクエストのみがAPIにアクセスできる状態を構築する。フロントエンドでは認証状態に応じたルーティングガードが機能する。</p>
+      <p>ユーザーがサインアップ・ログイン・ログアウトでき、JWTトークンによるステートレス認証が機能する。フロントエンドでは認証状態に応じたルーティングガードが動作する。</p>
     </div>
 
-    <h2>2-1. Deviseの設計判断 <span class="section-tag tag-rails">Rails</span></h2>
+    <div class="ref-box">
+      devise-jwtの仕組みや、devise_token_authとの比較については <a href="devise-jwt-deep-dive.html" style="color: #8b5cf6;">devise-jwt 詳細解説ページ</a> を参照してください。JWTそのものの構造、リフレッシュ戦略、revocation（失効）の仕組みを初心者向けに解説しています。
+    </div>
 
-    <p>DeviseはRails定番の認証gemだが、本来はブラウザ向け（Cookie/セッション前提）に設計されている。API-onlyモードではセッションが使えないため、トークンベースの認証を自前で実装する必要がある。</p>
+    <h2>認証フロー全体像</h2>
 
-    <h3>選択肢と判断</h3>
-    <ul>
-      <li><strong>devise_token_auth</strong>: Devise拡張gem。便利だがメンテナンス状況が不安定</li>
-      <li><strong>devise-jwt</strong>: JWT統合。シンプルだがトークン失効の管理が複雑</li>
-      <li><strong>Devise + 自前トークン管理</strong>: 最もシンプルで理解しやすい。今回はこれを採用</li>
-    </ul>
+    <div class="flow-diagram">
+【ログイン】
+  Client                        Rails API
+    │                               │
+    │  POST /api/v1/auth/sign_in    │
+    │  { email, password }          │
+    │──────────────────────────────▶│
+    │                               │  Devise: パスワード検証
+    │                               │  devise-jwt: JWTトークン生成
+    │   200 OK                      │
+    │   Authorization: Bearer eyJ... │
+    │◀──────────────────────────────│
+    │                               │
+    │  以降のリクエスト              │
+    │  Authorization: Bearer eyJ... │
+    │──────────────────────────────▶│
+    │                               │  devise-jwt: トークン検証
+    │   200 OK + data               │  → current_user 確定
+    │◀──────────────────────────────│
+
+【ログアウト】
+    │  DELETE /api/v1/auth/sign_out │
+    │  Authorization: Bearer eyJ... │
+    │──────────────────────────────▶│
+    │                               │  JTI を denylist に追加
+    │   200 OK                      │  → 以降このトークンは無効
+    │◀──────────────────────────────│</div>
+
+    <h2>2-1. Gem インストール <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/Gemfile（追加）</div>
+    <pre><code>gem 'devise'
+gem 'devise-jwt'</code></pre>
+
+    <pre><code>bundle install</code></pre>
 
     <div class="why-box">
-      自前トークンにする理由: Deviseのユーザー管理（パスワードハッシュ、バリデーション、モジュール構成）は使いつつ、トークン発行・検証だけを薄くカスタム実装する。JWTのような複雑なライフサイクル管理が不要なシンプルなアプリではこれが最も保守しやすい。
+      <strong>devise-jwt</strong> はDeviseにJWT認証を統合するgem。ログイン成功時に自動でJWTトークンを生成し、<code>Authorization</code> ヘッダーに載せてレスポンスを返す。以降のリクエストでは同ヘッダーのトークンを検証してユーザーを特定する。<br><br>
+      Deviseの認証ロジック（パスワードハッシュ・バリデーション・モジュール管理）はそのまま活用し、セッション管理だけをJWTに置き換える仕組み。
     </div>
 
     <h2>2-2. Devise インストール <span class="section-tag tag-rails">Rails</span></h2>
 
-    <pre><code>cd backend
-rails generate devise:install</code></pre>
-
-    <p>API-onlyモードではDevise用のViewは不要なので、生成されるガイドメッセージは無視してよい。</p>
+    <pre><code>rails generate devise:install</code></pre>
 
     <h3>Devise設定の調整</h3>
 
     <div class="file-label">backend/config/initializers/devise.rb（変更箇所のみ）</div>
-    <pre><code># API-onlyなのでナビゲーション系の設定を無効化
+    <pre><code># API-onlyなのでHTMLナビゲーションを無効化
 config.navigational_formats = []
 
-# メーラーの送信元（パスワードリセット等で使う場合）
-config.mailer_sender = 'noreply@example.com'</code></pre>
+# JWT設定
+config.jwt do |jwt|
+  jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY')
+  jwt.dispatch_requests = [
+    ['POST', %r{^/api/v1/auth/sign_in$}]
+  ]
+  jwt.revocation_requests = [
+    ['DELETE', %r{^/api/v1/auth/sign_out$}]
+  ]
+  jwt.expiration_time = 24.hours.to_i
+end</code></pre>
 
     <div class="why-box">
-      <code>navigational_formats = []</code> が重要。デフォルトでは認証失敗時にHTMLリダイレクトしようとするが、APIでは常にJSONレスポンスを返したい。空配列にすることで「HTMLフォーマットへのリダイレクト」を無効化し、401ステータスコードが返るようになる。
+      <strong><code>navigational_formats = []</code></strong> — デフォルトでは認証失敗時にHTMLリダイレクトしようとする。API-onlyでは常にJSONレスポンスを返したいので、空配列にしてリダイレクトを無効化する。これがないと401の代わりに302リダイレクトが返ってしまう。
+    </div>
+
+    <div class="why-box">
+      <strong><code>dispatch_requests</code></strong> — JWTトークンを「発行する」リクエストパターンを指定する。ログインエンドポイントにPOSTした時だけトークンを生成・レスポンスに付与する。全てのレスポンスにトークンを付けるわけではない。<br><br>
+      <strong><code>revocation_requests</code></strong> — JWTトークンを「失効させる」リクエストパターン。ログアウト時にトークンをdenylistに追加して無効化する。
+    </div>
+
+    <div class="why-box">
+      <strong><code>expiration_time = 24.hours.to_i</code></strong> — トークンの有効期限を24時間に設定。JWTはステートレスなので、発行後はサーバー側で「延長」できない。期限切れたら再ログインが必要。長すぎるとセキュリティリスク、短すぎるとUX悪化のトレードオフ。
+    </div>
+
+    <h3>JWT秘密鍵の生成</h3>
+
+    <pre><code># ランダムな秘密鍵を生成
+rails secret
+# => 出力された文字列を .env に設定</code></pre>
+
+    <div class="file-label">backend/.env（追加）</div>
+    <pre><code>DEVISE_JWT_SECRET_KEY=ここに上で生成した文字列を貼る</code></pre>
+
+    <div class="warn-box">
+      JWT秘密鍵は絶対に外部に公開してはいけない。この鍵があればどんなユーザーのJWTでも偽造できる。<code>.env</code> を <code>.gitignore</code> に含め、本番では環境変数やSecrets Managerで管理する。
     </div>
 
     <h2>2-3. User モデル生成 <span class="section-tag tag-rails">Rails</span></h2>
 
     <pre><code>rails generate devise User</code></pre>
 
-    <p>これによりマイグレーションファイルとUserモデルが生成される。追加カラムを付与する:</p>
+    <h3>JWTトークン失効用テーブルの作成</h3>
+
+    <pre><code>rails generate model JwtDenylist jti:string:index exp:datetime</code></pre>
 
     <div class="file-label">backend/db/migrate/XXXXXX_devise_create_users.rb（差分）</div>
     <pre><code>class DeviseCreateUsers &lt; ActiveRecord::Migration[7.1]
@@ -103,73 +168,101 @@ config.mailer_sender = 'noreply@example.com'</code></pre>
       ## 追加カラム
       t.string :display_name, null: false
       t.string :profile_image
-      t.string :authentication_token  # API認証用トークン
 
       t.timestamps null: false
     end
 
     add_index :users, :email, unique: true
-    add_index :users, :authentication_token, unique: true
+  end
+end</code></pre>
+
+    <div class="file-label">backend/db/migrate/XXXXXX_create_jwt_denylists.rb</div>
+    <pre><code>class CreateJwtDenylists &lt; ActiveRecord::Migration[7.1]
+  def change
+    create_table :jwt_denylists do |t|
+      t.string :jti, null: false
+      t.datetime :exp, null: false
+    end
+    add_index :jwt_denylists, :jti
   end
 end</code></pre>
 
     <div class="why-box">
-      <code>authentication_token</code> カラム: ログイン成功時にランダムトークンを生成し、このカラムに保存する。以降のAPIリクエストでは <code>Authorization: Bearer &lt;token&gt;</code> ヘッダーでこのトークンを送信し、ユーザーを特定する。セッション不要のステートレス認証になる。
+      <strong>JwtDenylistテーブルの役割:</strong> JWTは本来ステートレス（サーバー側に状態を持たない）だが、ログアウト時にトークンを「まだ有効期限内だけど使えなくする」必要がある。ログアウトされたトークンの <code>jti</code>（JWT ID: 各トークンの一意識別子）をこのテーブルに記録し、以降そのjtiのトークンが来たら認証を拒否する。<br><br>
+      <code>exp</code> を保存する理由: トークンの有効期限が過ぎたdenylistレコードは不要なので、定期的にクリーンアップできるようにする。
     </div>
 
     <pre><code>rails db:migrate</code></pre>
 
-    <h3>Userモデルの実装</h3>
+    <h3>モデルの実装</h3>
 
     <div class="file-label">backend/app/models/user.rb</div>
     <pre><code>class User &lt; ApplicationRecord
-  devise :database_authenticatable, :registerable, :validatable
+  devise :database_authenticatable, :registerable, :validatable,
+         :jwt_authenticatable, jwt_revocation_strategy: JwtDenylist
 
   has_many :interests, dependent: :destroy
   has_many :news, dependent: :destroy
 
   validates :display_name, presence: true
-
-  before_create :generate_authentication_token
-
-  private
-
-  def generate_authentication_token
-    loop do
-      self.authentication_token = SecureRandom.hex(32)
-      break unless User.exists?(authentication_token: authentication_token)
-    end
-  end
 end</code></pre>
 
     <div class="why-box">
-      <code>SecureRandom.hex(32)</code> で64文字のランダム文字列を生成。<code>loop</code> でユニーク性を保証している。暗号学的に安全な乱数生成器を使うので、トークンの推測は事実上不可能。<br><br>
-      <code>:validatable</code> モジュールはメールのフォーマット検証とパスワード長の検証を自動で追加する。自分で <code>validates :email</code> を書く必要がない。
+      <strong><code>:jwt_authenticatable</code></strong> — Deviseのモジュールとしてdevise-jwtの認証機能を追加する。これにより:
+      <ul style="margin-top:0.5rem">
+        <li>ログイン成功時にJWTを自動生成してレスポンスヘッダーに付与</li>
+        <li>リクエストの <code>Authorization</code> ヘッダーからJWTを自動検証</li>
+        <li><code>current_user</code> が自動設定される</li>
+      </ul>
+      <strong><code>jwt_revocation_strategy: JwtDenylist</code></strong> — ログアウト時のトークン失効方式を指定。ここではdenylist方式を使用する。
+    </div>
+
+    <div class="file-label">backend/app/models/jwt_denylist.rb</div>
+    <pre><code>class JwtDenylist &lt; ApplicationRecord
+  include Devise::JWT::RevocationStrategies::Denylist
+
+  self.table_name = 'jwt_denylists'
+end</code></pre>
+
+    <div class="why-box">
+      <code>Devise::JWT::RevocationStrategies::Denylist</code> をincludeすると、devise-jwtが自動的にこのテーブルを使ってトークン失効チェックを行う。リクエストのたびに「このトークンのjtiがdenylistに存在するか」をDBに問い合わせる。indexがあるので高速（O(log n)）。
     </div>
 
     <h2>2-4. 認証コントローラー <span class="section-tag tag-rails">Rails</span></h2>
 
-    <h3>ベースコントローラーに認証メソッドを追加</h3>
+    <h3>ベースコントローラー</h3>
 
     <div class="file-label">backend/app/controllers/application_controller.rb</div>
     <pre><code>class ApplicationController &lt; ActionController::API
+  before_action :authenticate_user!
+
   private
 
   def authenticate_user!
+    # Authorization ヘッダーからJWTを取得・検証
     token = request.headers['Authorization']&.split(' ')&.last
-    @current_user = User.find_by(authentication_token: token)
+    return render_unauthorized unless token
 
-    render json: { error: 'Unauthorized' }, status: :unauthorized unless @current_user
+    begin
+      # devise-jwt がトークンをデコードし、ユーザーを特定
+      @current_user = Warden::JWTAuth::UserDecoder.new.call(token, :user, nil)
+    rescue JWT::DecodeError, JWT::ExpiredSignature
+      render_unauthorized
+    end
   end
 
   def current_user
     @current_user
   end
+
+  def render_unauthorized
+    render json: { error: 'Unauthorized' }, status: :unauthorized
+  end
 end</code></pre>
 
     <div class="why-box">
-      <code>request.headers['Authorization']</code> からBearerトークンを取り出す。<code>&.split(' ')&.last</code> は安全なnilチェーン（Authorization ヘッダーが無い場合にnilを返す）。トークンからユーザーをDB検索し、見つからなければ401を返す。<br><br>
-      この <code>authenticate_user!</code> を <code>before_action</code> で各コントローラーに適用することで、認証必須のエンドポイントを作る。
+      <strong><code>Warden::JWTAuth::UserDecoder</code></strong> — devise-jwtの内部デコーダー。JWTの署名検証、有効期限チェック、denylistチェック、ユーザーDB検索を一括で行う。トークンが不正・期限切れ・失効済みのいずれでも例外が発生する。<br><br>
+      デフォルトのDeviseはWardenミドルウェア経由で認証するが、API-onlyモードではセッションがないため、コントローラーで明示的にデコードする方が制御しやすい。
     </div>
 
     <h3>登録コントローラー</h3>
@@ -181,13 +274,17 @@ end</code></pre>
   module V1
     module Auth
       class RegistrationsController &lt; ApplicationController
+        skip_before_action :authenticate_user!, only: [:create]
+
         def create
           user = User.new(sign_up_params)
 
           if user.save
+            token = Warden::JWTAuth::UserEncoder.new.call(user, :user, nil).first
+
             render json: {
               user: user_response(user),
-              token: user.authentication_token
+              token: token
             }, status: :created
           else
             render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
@@ -214,7 +311,8 @@ end</code></pre>
 end</code></pre>
 
     <div class="why-box">
-      登録成功時にトークンをレスポンスに含めることで、ユーザーはサインアップ直後からAPIにアクセスできる（再ログイン不要）。これはUX上重要: サインアップ → 即ダッシュボードに遷移できる。
+      <strong><code>skip_before_action :authenticate_user!</code></strong> — 登録エンドポイントは未認証ユーザーがアクセスするので、認証チェックをスキップする。<code>only: [:create]</code> で対象アクションを限定。<br><br>
+      <strong><code>Warden::JWTAuth::UserEncoder</code></strong> — ユーザーオブジェクトからJWTトークンを生成する。サインアップ直後にトークンを返すことで、再ログインなしで即座にAPIアクセスできる。
     </div>
 
     <h3>セッションコントローラー（ログイン/ログアウト）</h3>
@@ -224,16 +322,17 @@ end</code></pre>
   module V1
     module Auth
       class SessionsController &lt; ApplicationController
+        skip_before_action :authenticate_user!, only: [:create]
+
         def create
           user = User.find_by(email: params[:user][:email])
 
           if user&amp;.valid_password?(params[:user][:password])
-            # ログインごとにトークンを再生成（セキュリティ向上）
-            user.update!(authentication_token: SecureRandom.hex(32))
+            token = Warden::JWTAuth::UserEncoder.new.call(user, :user, nil).first
 
             render json: {
               user: user_response(user),
-              token: user.authentication_token
+              token: token
             }
           else
             render json: { error: 'Invalid email or password' }, status: :unauthorized
@@ -241,9 +340,17 @@ end</code></pre>
         end
 
         def destroy
-          authenticate_user!
-          # トークンを無効化（ログアウト）
-          current_user.update!(authentication_token: SecureRandom.hex(32))
+          # Authorization ヘッダーのトークンをdenylistに追加
+          token = request.headers['Authorization']&.split(' ')&.last
+          if token
+            begin
+              payload = Warden::JWTAuth::TokenDecoder.new.call(token)
+              JwtDenylist.create!(jti: payload['jti'], exp: Time.at(payload['exp']))
+            rescue JWT::DecodeError
+              # 既に無効なトークンなら何もしない
+            end
+          end
+
           render json: { message: 'Logged out successfully' }
         end
 
@@ -263,11 +370,16 @@ end</code></pre>
 end</code></pre>
 
     <div class="why-box">
-      <strong>ログイン時にトークン再生成</strong>する理由: もし古いトークンが漏洩していた場合、ログインするたびに無効化される。これにより「盗まれたトークンがいつまでも有効」というリスクを軽減する。<br><br>
-      <strong>ログアウト時もトークン再生成</strong>: トークンをnullにするのではなく新しい値に置き換える。これにより、旧トークンが確実に無効化される。<code>valid_password?</code> はDeviseが提供するメソッドで、bcryptでハッシュ比較してくれる。
+      <strong>ログアウト（destroy）の仕組み:</strong>
+      <ol style="margin-top:0.5rem">
+        <li>リクエストのJWTをデコードして <code>jti</code>（トークンID）と <code>exp</code>（有効期限）を取得</li>
+        <li><code>jwt_denylists</code> テーブルにその <code>jti</code> を記録</li>
+        <li>以降、同じjtiのトークンが来たらdenylistに存在するため認証が拒否される</li>
+      </ol>
+      JWTは「発行済みのトークンを直接無効化」できない（サーバーに状態がないため）。denylistパターンは「使えなくしたいトークンのIDを覚えておく」ことで擬似的な失効を実現する。
     </div>
 
-    <h3>ルーティング更新</h3>
+    <h3>ルーティング</h3>
 
     <div class="file-label">backend/config/routes.rb</div>
     <pre><code>Rails.application.routes.draw do
@@ -281,7 +393,6 @@ end</code></pre>
         delete 'sign_out', to: 'sessions#destroy'
       end
 
-      # 認証済みエンドポイント（Step 3以降で追加）
       resource :user, only: [:show, :update]
     end
   end
@@ -293,7 +404,7 @@ end</code></pre>
     <pre><code>module Api
   module V1
     class UsersController &lt; ApplicationController
-      before_action :authenticate_user!
+      # authenticate_user! はApplicationControllerのbefore_actionで適用済み
 
       def show
         render json: {
@@ -315,25 +426,27 @@ curl -X POST http://localhost:3000/api/v1/auth/sign_up \
   -d '{"user": {"email": "test@example.com", "password": "password123", "display_name": "Test User"}}'
 
 # レスポンス例:
-# {"user":{"id":1,"email":"test@example.com","display_name":"Test User",...},"token":"abc123..."}
+# {"user":{"id":1,"email":"test@example.com","display_name":"Test User"},"token":"eyJhbG..."}
 
 # ログイン
 curl -X POST http://localhost:3000/api/v1/auth/sign_in \
   -H "Content-Type: application/json" \
   -d '{"user": {"email": "test@example.com", "password": "password123"}}'
 
-# 認証済みリクエスト（トークンを使用）
+# 認証済みリクエスト（JWTを使用）
 curl http://localhost:3000/api/v1/user \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 
-# ログアウト
+# ログアウト（トークンがdenylistに追加される）
 curl -X DELETE http://localhost:3000/api/v1/auth/sign_out \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE"</code></pre>
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 
-    <!-- ==================== Frontend Auth ==================== -->
+# ログアウト後に同じトークンで再アクセス → 401
+curl http://localhost:3000/api/v1/user \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+# => {"error":"Unauthorized"}</code></pre>
+
     <h2>2-6. フロントエンド: APIクライアント <span class="section-tag tag-react">React</span></h2>
-
-    <p>認証トークンの保存・送信を一元管理する fetch ラッパー:</p>
 
     <div class="file-label">frontend/src/lib/api.ts</div>
     <pre><code>const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
@@ -370,7 +483,7 @@ export async function api&lt;T&gt;(path: string, options: RequestInit = {}): Pro
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
+    const body = await response.json().catch(() =&gt; ({}));
     throw new Error(body.error || body.errors?.join(', ') || `API Error: ${response.status}`);
   }
 
@@ -378,42 +491,95 @@ export async function api&lt;T&gt;(path: string, options: RequestInit = {}): Pro
 }</code></pre>
 
     <div class="why-box">
-      401が返ってきたら自動的にトークンを破棄しログインページへリダイレクトする。これにより、トークン期限切れやサーバー側でのトークン無効化に対して、どのページにいても一貫した挙動になる。
+      JWTの管理はシンプル: ログイン成功時にレスポンスの <code>token</code> を <code>localStorage</code> に保存し、以降のリクエストで <code>Authorization: Bearer ...</code> ヘッダーに付与するだけ。カスタムトークン方式と異なり、複数のヘッダー（access-token, client, uid等）を管理する必要がない。
     </div>
 
     <h2>2-7. フロントエンド: AuthContext & AuthGuard <span class="section-tag tag-react">React</span></h2>
 
-    <div class="file-label">frontend/src/contexts/AuthContext.tsx（ポイントのみ）</div>
-    <pre><code>// TanStack Query の useCurrentUser を使い、認証状態を管理
-// ログイン成功 → setToken() → invalidateQueries(['currentUser'])
-// ログアウト → clearToken() → invalidateQueries(['currentUser'])
+    <div class="file-label">frontend/src/hooks/useAuth.ts</div>
+    <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api, setToken, clearToken } from '../lib/api';
 
 export const useCurrentUser = () =&gt; {
   return useQuery({
     queryKey: ['currentUser'],
     queryFn: () =&gt; api&lt;User&gt;('/user'),
-    retry: false,  // 401なら即失敗（リトライしない）
-    staleTime: 5 * 60 * 1000,  // 5分間はキャッシュ利用
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useSignIn = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) =&gt; {
+      const res = await api&lt;{ user: User; token: string }&gt;('/auth/sign_in', {
+        method: 'POST',
+        body: JSON.stringify({ user: { email, password } }),
+      });
+      setToken(res.token);  // JWTをlocalStorageに保存
+      return res.user;
+    },
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+    },
+  });
+};
+
+export const useSignUp = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { email: string; password: string; password_confirmation: string; display_name: string }) =&gt; {
+      const res = await api&lt;{ user: User; token: string }&gt;('/auth/sign_up', {
+        method: 'POST',
+        body: JSON.stringify({ user: params }),
+      });
+      setToken(res.token);
+      return res.user;
+    },
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+    },
+  });
+};
+
+export const useSignOut = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =&gt; api('/auth/sign_out', { method: 'DELETE' }),
+    onSuccess: () =&gt; {
+      clearToken();
+      queryClient.clear();  // 全キャッシュクリア（認証済みデータを残さない）
+    },
   });
 };</code></pre>
 
-    <div class="file-label">frontend/src/components/auth/AuthGuard.tsx（ポイントのみ）</div>
-    <pre><code>// useCurrentUser() が loading なら Spinner表示
-// error (401) ならリダイレクト → /sign-in
-// success なら children (Outlet) をレンダー</code></pre>
+    <div class="file-label">frontend/src/components/auth/AuthGuard.tsx（ポイント）</div>
+    <pre><code>import { Outlet, Navigate } from 'react-router';
+import { useCurrentUser } from '../../hooks/useAuth';
+
+export function AuthGuard() {
+  const { data: user, isLoading, isError } = useCurrentUser();
+
+  if (isLoading) return &lt;LoadingSpinner /&gt;;
+  if (isError || !user) return &lt;Navigate to="/sign-in" replace /&gt;;
+
+  return &lt;Outlet /&gt;;
+}</code></pre>
 
     <div class="tip-box">
-      React Router v7のレイアウトルートとして <code>AuthGuard</code> を配置することで、<code>/dashboard</code> 以下のルート全てに認証チェックが自動適用される。個々のページコンポーネントに認証ロジックを書く必要がない。
+      <code>queryClient.clear()</code> をログアウト時に呼ぶ理由: キャッシュに前のユーザーのデータ（Interest一覧やニュース）が残っていると、別ユーザーでログインした時に古いデータが一瞬見えてしまう。全キャッシュをクリアすることで確実に防ぐ。
     </div>
 
     <h2>2-8. 動作確認チェックリスト</h2>
     <ol>
-      <li>サインアップ → トークンがlocalStorageに保存される</li>
-      <li>ログイン → 新しいトークンでlocalStorageが更新される</li>
+      <li>サインアップ → JWTがレスポンスに含まれ、localStorageに保存される</li>
+      <li>ログイン → 新しいJWTでlocalStorageが更新される</li>
       <li>認証済みで <code>/api/v1/user</code> が200を返す</li>
-      <li>無効トークンで401が返る</li>
-      <li>ログアウト → 旧トークンが無効化される</li>
-      <li>フロントエンドで未認証状態だと <code>/dashboard</code> にアクセスできずリダイレクトされる</li>
+      <li>無効トークン（改ざん）で401が返る</li>
+      <li>ログアウト → 同じトークンで再アクセスすると401（denylist）</li>
+      <li>24時間後にトークンが期限切れになる（<code>exp</code> クレームを確認）</li>
+      <li>フロントエンドで未認証だと <code>/dashboard</code> にアクセスできずリダイレクトされる</li>
     </ol>
 
     <div class="nav-footer">
