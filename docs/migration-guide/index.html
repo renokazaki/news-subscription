@@ -215,7 +215,7 @@
         <span class="tech-badge react">React 19 + Vite</span>
         <span class="tech-badge react">TanStack Query</span>
         <span class="tech-badge rails">Rails 7 API</span>
-        <span class="tech-badge rails">Devise</span>
+        <span class="tech-badge rails">Devise + JWT</span>
         <span class="tech-badge rails">Sidekiq</span>
         <span class="tech-badge aws">AWS CDK</span>
       </div>
@@ -256,18 +256,35 @@
       <a href="step2-authentication.html" class="step-card">
         <div class="step-header">
           <div class="step-number rails">02</div>
-          <div class="step-title">認証システム（Devise）</div>
+          <div class="step-title">認証システム（Devise + JWT）</div>
         </div>
         <div class="step-desc">
-          DeviseのAPI認証セットアップ、Userモデル・マイグレーション、JWTまたはセッションベーストークン認証の実装、CORS設定。フロントエンドではfetchラッパーとAuthContextを構築。
+          devise-jwtでステートレスAPI認証を構築。Userモデル・JWTトークン発行・Denylistによるログアウト・CORS設定。フロントエンドではfetchラッパーとAuthContextを構築。
         </div>
         <div class="step-tags">
-          <span class="tag">Devise</span>
+          <span class="tag">devise-jwt</span>
+          <span class="tag">JWT Denylist</span>
           <span class="tag">CORS</span>
-          <span class="tag">トークン管理</span>
           <span class="tag">AuthGuard</span>
           <span class="depth-indicator depth-detailed">Rails: 詳細</span>
           <span class="depth-indicator depth-light">React: ポイントのみ</span>
+        </div>
+      </a>
+
+      <!-- Deep Dive -->
+      <a href="devise-jwt-deep-dive.html" class="step-card">
+        <div class="step-header">
+          <div class="step-number rails" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6;">📖</div>
+          <div class="step-title">devise-jwt 詳細解説（読み物）</div>
+        </div>
+        <div class="step-desc">
+          JWTの基礎構造、セッション認証との比較、Revocation（失効）戦略の選び方。コラムとしてdevise_token_authとの違いも解説。
+        </div>
+        <div class="step-tags">
+          <span class="tag">JWT構造</span>
+          <span class="tag">Denylist / JTIMatcher / Allowlist</span>
+          <span class="tag">devise_token_auth比較</span>
+          <span class="depth-indicator depth-detailed">初心者向け解説</span>
         </div>
       </a>
 
