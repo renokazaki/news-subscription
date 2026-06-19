@@ -178,7 +178,88 @@ end</code></pre>
       <code>resources :interests, only: [...]</code> — RESTfulルーティングの宣言。<code>only</code> で必要なアクションだけに限定する。<code>:show</code> を含めていないのは、Interest単体の詳細表示画面が不要なため。不要なルートを公開しないのはセキュリティの基本。
     </div>
 
-    <h2>3-3. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
+    <h2>3-3. RSpec リクエストスペック <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/spec/requests/api/v1/interests_spec.rb</div>
+    <pre><code>require 'rails_helper'
+
+RSpec.describe 'Api::V1::Interests', type: :request do
+  let(:user) { create(:user) }
+  let(:token) { Warden::JWTAuth::UserEncoder.new.call(user, :user, nil).first }
+  let(:auth_headers) { { 'Authorization' =&gt; "Bearer #{token}" } }
+
+  describe 'GET /api/v1/interests' do
+    before do
+      create(:interest, user: user, keyword: 'React')
+      create(:interest, user: user, keyword: 'Rails')
+    end
+
+    it 'returns all interests for the current user' do
+      get '/api/v1/interests', headers: auth_headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json.length).to eq(2)
+    end
+  end
+
+  describe 'POST /api/v1/interests' do
+    it 'creates a new interest' do
+      post '/api/v1/interests',
+           params: { interest: { keyword: 'TypeScript' } },
+           headers: auth_headers,
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      json = JSON.parse(response.body)
+      expect(json['keyword']).to eq('TypeScript')
+    end
+  end
+
+  describe 'PATCH /api/v1/interests/:id' do
+    let!(:interest) { create(:interest, user: user, keyword: 'React') }
+
+    it 'updates the interest' do
+      patch "/api/v1/interests/#{interest.id}",
+            params: { interest: { keyword: 'Vue' } },
+            headers: auth_headers,
+            as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)['keyword']).to eq('Vue')
+    end
+  end
+
+  describe 'DELETE /api/v1/interests/:id' do
+    let!(:interest) { create(:interest, user: user, keyword: 'React') }
+
+    it 'deletes the interest' do
+      delete "/api/v1/interests/#{interest.id}",
+             headers: auth_headers
+
+      expect(response).to have_http_status(:no_content)
+    end
+  end
+end</code></pre>
+
+    <div class="file-label">backend/spec/factories/interests.rb</div>
+    <pre><code>FactoryBot.define do
+  factory :interest do
+    user
+    keyword { Faker::ProgrammingLanguage.name }
+  end
+end</code></pre>
+
+    <div class="why-box">
+      各エンドポイントのリクエストスペックを書くことで:
+      <ul style="margin-top:0.5rem">
+        <li><strong>テスト</strong>: CRUD操作が正しく動作することを保証</li>
+        <li><strong>OpenAPI仕様書</strong>: <code>OPENAPI=1 bundle exec rspec</code> で <code>doc/openapi.yaml</code> にInterest APIの仕様が追記される</li>
+        <li><strong>フロントの型</strong>: <code>npm run generate:api</code> で型が自動生成され、手動で型定義を書く必要がなくなる</li>
+      </ul>
+    </div>
+
+    <h2>3-4. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
 
     <pre><code># Interest作成
 curl -X POST http://localhost:3000/api/v1/interests \
@@ -202,9 +283,9 @@ curl -X DELETE http://localhost:3000/api/v1/interests/1 \
 # => 204 No Content</code></pre>
 
     <!-- ==================== Frontend ==================== -->
-    <h2>3-4. フロントエンド: TanStack Query フック <span class="section-tag tag-react">React</span></h2>
+    <h2>3-5. フロントエンド: OpenAPI + TanStack Query <span class="section-tag tag-react">React</span></h2>
 
-    <p>Server Actions から TanStack Query への移行パターン:</p>
+    <p>Server Actions から OpenAPI自動生成フックへの移行パターン:</p>
 
     <h3>移行前（Next.js Server Actions）</h3>
     <pre><code>// Before: Server Action
@@ -214,64 +295,71 @@ export async function postInterestAction(keyword: string) {
   revalidatePath("/dashboard");
 }</code></pre>
 
-    <h3>移行後（TanStack Query useMutation）</h3>
+    <h3>移行後（openapi-react-query）</h3>
 
-    <div class="file-label">frontend/src/hooks/useInterests.ts</div>
-    <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import type { Interest } from '../types';
+    <p>Step 3-3 で書いたRSpecテストからOpenAPI仕様書を生成し、フロントの型とフックを自動生成する:</p>
 
-export const useInterests = () =&gt; {
-  return useQuery({
-    queryKey: ['interests'],
-    queryFn: () =&gt; api&lt;Interest[]&gt;('/interests'),
-  });
-};
+    <pre><code># バックエンド: テストを実行してOpenAPI仕様書を更新
+cd backend
+OPENAPI=1 bundle exec rspec spec/requests/api/v1/interests_spec.rb
 
-export const useCreateInterest = () =&gt; {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (keyword: string) =&gt;
-      api&lt;Interest&gt;('/interests', {
-        method: 'POST',
-        body: JSON.stringify({ interest: { keyword } }),
-      }),
-    onSuccess: () =&gt; {
-      queryClient.invalidateQueries({ queryKey: ['interests'] });
-    },
-  });
-};
+# フロントエンド: 型を再生成
+cd ../frontend
+npm run generate:api</code></pre>
 
-export const useUpdateInterest = () =&gt; {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, keyword }: { id: number; keyword: string }) =&gt;
-      api&lt;Interest&gt;(`/interests/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ interest: { keyword } }),
-      }),
-    onSuccess: () =&gt; {
-      queryClient.invalidateQueries({ queryKey: ['interests'] });
-    },
-  });
-};
+    <p>生成された型を使って、<code>$api</code> クライアント経由でAPI呼び出し:</p>
 
-export const useDeleteInterest = () =&gt; {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) =&gt;
-      api(`/interests/${id}`, { method: 'DELETE' }),
-    onSuccess: () =&gt; {
-      queryClient.invalidateQueries({ queryKey: ['interests'] });
-    },
-  });
-};</code></pre>
+    <div class="file-label">frontend/src/lib/api/client.ts（Step 1で作成済み、詳細はOpenAPI解説参照）</div>
+    <pre><code>import createClient from 'openapi-fetch';
+import createQueryHooks from 'openapi-react-query';
+import type { paths } from './v1'; // openapi-typescriptで自動生成された型
+
+const client = createClient&lt;paths&gt;({
+  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+});
+
+// 認証トークンを自動付与するミドルウェア
+client.use({
+  async onRequest({ request }) {
+    const token = localStorage.getItem('auth-token');
+    if (token) request.headers.set('Authorization', `Bearer ${token}`);
+    return request;
+  },
+});
+
+export const $api = createQueryHooks(client, 'api');</code></pre>
+
+    <div class="file-label">コンポーネントでの使用例</div>
+    <pre><code>// 一覧取得 — queryKey, queryFn を手書きする必要がない
+const { data: interests, isLoading } = $api.useQuery(
+  'get', '/api/v1/interests'
+);
+
+// 作成
+const createMutation = $api.useMutation('post', '/api/v1/interests');
+createMutation.mutate({ body: { interest: { keyword: 'TypeScript' } } });
+
+// 更新
+const updateMutation = $api.useMutation('patch', '/api/v1/interests/{id}');
+updateMutation.mutate({
+  params: { path: { id: interestId } },
+  body: { interest: { keyword: 'React' } },
+});
+
+// 削除
+const deleteMutation = $api.useMutation('delete', '/api/v1/interests/{id}');
+deleteMutation.mutate({ params: { path: { id: interestId } } });</code></pre>
 
     <div class="why-box">
-      <strong>移行パターン:</strong> Next.jsの <code>revalidatePath()</code> は「このパスのキャッシュを無効化して再フェッチ」の意味。TanStack Queryでは <code>invalidateQueries()</code> が同等の役割を果たす。mutation成功時に <code>invalidateQueries</code> を呼ぶことで、画面が自動的に最新データに更新される。
+      <strong>手動フックとの違い:</strong> 従来は <code>useInterests</code>, <code>useCreateInterest</code>, <code>useUpdateInterest</code>, <code>useDeleteInterest</code> を1つずつ手書きしていた。<code>$api</code> を使えば、HTTPメソッドとパスを指定するだけで型安全なフックが使える。queryKeyもパスから自動生成される。<br><br>
+      <strong>移行パターン:</strong> Next.jsの <code>revalidatePath()</code> に相当するキャッシュ無効化は、<code>onSuccess</code> で <code>queryClient.invalidateQueries()</code> を呼ぶ。<code>$api.useMutation</code> のコールバックで同じパターンが使える。
     </div>
 
-    <h2>3-5. フロントエンド: UIコンポーネント（概要） <span class="section-tag tag-react">React</span></h2>
+    <div class="tip-box">
+      OpenAPIクライアントのセットアップ詳細やミドルウェアの仕組みについては <a href="openapi-workflow.html" style="color: var(--accent);">OpenAPIワークフロー解説</a> を参照。
+    </div>
+
+    <h2>3-6. フロントエンド: UIコンポーネント（概要） <span class="section-tag tag-react">React</span></h2>
 
     <p>Interest管理UIのポイントだけ整理:</p>
 
@@ -282,17 +370,25 @@ export const useDeleteInterest = () =&gt; {
       <li>エラー時は <code>sonner</code> の toast でユーザーに通知</li>
     </ul>
 
-    <pre><code>// 使い方の例
-const { mutate, isPending } = useCreateInterest();
+    <pre><code>// 使い方の例（$api.useMutation）
+const createMutation = $api.useMutation('post', '/api/v1/interests');
 
 const onSubmit = (data: { keyword: string }) =&gt; {
-  mutate(data.keyword, {
-    onSuccess: () =&gt; toast.success('登録しました'),
-    onError: (err) =&gt; toast.error(err.message),
-  });
-};</code></pre>
+  createMutation.mutate(
+    { body: { interest: { keyword: data.keyword } } },
+    {
+      onSuccess: () =&gt; toast.success('登録しました'),
+      onError: (err) =&gt; toast.error(err.message),
+    }
+  );
+};
 
-    <h2>3-6. 動作確認チェックリスト</h2>
+// isPending で送信中状態を取得
+&lt;Button disabled={createMutation.isPending}&gt;
+  {createMutation.isPending ? '登録中...' : '登録'}
+&lt;/Button&gt;</code></pre>
+
+    <h2>3-7. 動作確認チェックリスト</h2>
     <ol>
       <li>Interest作成 → 一覧に即反映される</li>
       <li>20文字超のキーワード → バリデーションエラーが返る</li>
