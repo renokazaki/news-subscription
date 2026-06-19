@@ -418,7 +418,127 @@ end</code></pre>
   end
 end</code></pre>
 
-    <h2>2-5. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
+    <h2>2-5. RSpec リクエストスペック <span class="section-tag tag-rails">Rails</span></h2>
+
+    <p>認証エンドポイントのテストを書く。このテストは動作確認だけでなく、<code>rspec-openapi</code> によりOpenAPI仕様書の自動生成にも使われる。</p>
+
+    <div class="file-label">backend/spec/requests/api/v1/auth/registrations_spec.rb</div>
+    <pre><code>require 'rails_helper'
+
+RSpec.describe 'Api::V1::Auth::Registrations', type: :request do
+  describe 'POST /api/v1/auth/sign_up' do
+    let(:valid_params) do
+      {
+        user: {
+          email: 'new@example.com',
+          password: 'password123',
+          password_confirmation: 'password123',
+          display_name: 'New User'
+        }
+      }
+    end
+
+    context 'with valid parameters' do
+      it 'creates a new user and returns JWT token' do
+        post '/api/v1/auth/sign_up', params: valid_params, as: :json
+
+        expect(response).to have_http_status(:created)
+        json = JSON.parse(response.body)
+        expect(json['user']['email']).to eq('new@example.com')
+        expect(json['token']).to be_present
+      end
+    end
+
+    context 'with invalid parameters' do
+      it 'returns validation errors' do
+        post '/api/v1/auth/sign_up',
+             params: { user: { email: '', password: '' } },
+             as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+  end
+end</code></pre>
+
+    <div class="file-label">backend/spec/requests/api/v1/auth/sessions_spec.rb</div>
+    <pre><code>require 'rails_helper'
+
+RSpec.describe 'Api::V1::Auth::Sessions', type: :request do
+  let!(:user) { create(:user, email: 'test@example.com', password: 'password123') }
+
+  describe 'POST /api/v1/auth/sign_in' do
+    it 'returns JWT token on successful login' do
+      post '/api/v1/auth/sign_in',
+           params: { user: { email: 'test@example.com', password: 'password123' } },
+           as: :json
+
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json['token']).to be_present
+      expect(json['user']['email']).to eq('test@example.com')
+    end
+
+    it 'returns 401 on invalid credentials' do
+      post '/api/v1/auth/sign_in',
+           params: { user: { email: 'test@example.com', password: 'wrong' } },
+           as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe 'DELETE /api/v1/auth/sign_out' do
+    it 'invalidates the JWT token' do
+      # まずログインしてトークン取得
+      post '/api/v1/auth/sign_in',
+           params: { user: { email: 'test@example.com', password: 'password123' } },
+           as: :json
+      token = JSON.parse(response.body)['token']
+
+      # ログアウト
+      delete '/api/v1/auth/sign_out',
+             headers: { 'Authorization' =&gt; "Bearer #{token}" }
+
+      expect(response).to have_http_status(:ok)
+
+      # 同じトークンでアクセス → 401
+      get '/api/v1/user',
+          headers: { 'Authorization' =&gt; "Bearer #{token}" }
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+end</code></pre>
+
+    <div class="why-box">
+      <strong>リクエストスペックが二重の役割を果たす:</strong>
+      <ol style="margin-top:0.5rem">
+        <li><strong>テスト</strong>: 認証フローが正しく動くことを保証</li>
+        <li><strong>API仕様書生成</strong>: <code>OPENAPI=1 bundle exec rspec</code> で実行すると、これらのテストケースからOpenAPI仕様書が自動生成される。リクエスト/レスポンスの形式がそのまま仕様書に反映される</li>
+      </ol>
+    </div>
+
+    <h3>FactoryBot でテストデータ定義</h3>
+
+    <div class="file-label">backend/spec/factories/users.rb</div>
+    <pre><code>FactoryBot.define do
+  factory :user do
+    email { Faker::Internet.email }
+    password { 'password123' }
+    display_name { Faker::Name.name }
+  end
+end</code></pre>
+
+    <h3>OpenAPI仕様書の生成</h3>
+
+    <pre><code>OPENAPI=1 bundle exec rspec spec/requests/
+# => backend/doc/openapi.yaml が生成/更新される</code></pre>
+
+    <div class="tip-box">
+      生成された <code>doc/openapi.yaml</code> をフロントエンド側で使う方法は <a href="openapi-workflow.html" style="color: var(--accent);">OpenAPIワークフロー解説</a> を参照。Step 1で設定した <code>npm run generate:api</code> を実行すると、このYAMLからTypeScript型定義が自動生成される。
+    </div>
+
+    <h2>2-6. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
 
     <pre><code># サインアップ
 curl -X POST http://localhost:3000/api/v1/auth/sign_up \
@@ -446,7 +566,7 @@ curl http://localhost:3000/api/v1/user \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 # => {"error":"Unauthorized"}</code></pre>
 
-    <h2>2-6. フロントエンド: APIクライアント <span class="section-tag tag-react">React</span></h2>
+    <h2>2-7. フロントエンド: APIクライアント <span class="section-tag tag-react">React</span></h2>
 
     <div class="file-label">frontend/src/lib/api.ts</div>
     <pre><code>const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
@@ -494,7 +614,7 @@ export async function api&lt;T&gt;(path: string, options: RequestInit = {}): Pro
       JWTの管理はシンプル: ログイン成功時にレスポンスの <code>token</code> を <code>localStorage</code> に保存し、以降のリクエストで <code>Authorization: Bearer ...</code> ヘッダーに付与するだけ。カスタムトークン方式と異なり、複数のヘッダー（access-token, client, uid等）を管理する必要がない。
     </div>
 
-    <h2>2-7. フロントエンド: AuthContext & AuthGuard <span class="section-tag tag-react">React</span></h2>
+    <h2>2-8. フロントエンド: AuthContext & AuthGuard <span class="section-tag tag-react">React</span></h2>
 
     <div class="file-label">frontend/src/hooks/useAuth.ts</div>
     <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -571,7 +691,7 @@ export function AuthGuard() {
       <code>queryClient.clear()</code> をログアウト時に呼ぶ理由: キャッシュに前のユーザーのデータ（Interest一覧やニュース）が残っていると、別ユーザーでログインした時に古いデータが一瞬見えてしまう。全キャッシュをクリアすることで確実に防ぐ。
     </div>
 
-    <h2>2-8. 動作確認チェックリスト</h2>
+    <h2>2-9. 動作確認チェックリスト</h2>
     <ol>
       <li>サインアップ → JWTがレスポンスに含まれ、localStorageに保存される</li>
       <li>ログイン → 新しいJWTでlocalStorageが更新される</li>

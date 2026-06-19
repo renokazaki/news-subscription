@@ -117,16 +117,36 @@ gem 'faraday'             # 外部API呼び出し用。Net::HTTPより扱いや�
 
 # Auth
 gem 'devise'              # 認証フレームワーク
+gem 'devise-jwt'          # JWT認証（ステートレスAPI認証）
 
-# Development
+# Development / Test
 gem 'rspec-rails', group: [:development, :test]
-gem 'factory_bot_rails', group: [:development, :test]</code></pre>
+gem 'factory_bot_rails', group: [:development, :test]
+gem 'rspec-openapi', group: [:test]  # RSpecからOpenAPI仕様書を自動生成</code></pre>
+
+    <div class="why-box">
+      <code>rspec-openapi</code> はRSpecのリクエストスペックを実行するだけで、OpenAPI（Swagger）仕様書のYAML/JSONを自動生成するgem。手動でAPI仕様書をメンテナンスする必要がなくなり、「テストが通る = 仕様書が最新」の状態を維持できる。詳細は <a href="openapi-workflow.html" style="color: var(--accent);">OpenAPIワークフロー解説</a> を参照。
+    </div>
 
     <div class="why-box">
       <code>rack-cors</code> は必須。ブラウザはセキュリティのためオリジン（ドメイン）が異なるリクエストをデフォルトでブロックする（Same-Origin Policy）。Rails APIが <code>localhost:3000</code>、ReactがVite dev serverの <code>localhost:5173</code> で動くため、CORSヘッダーを返さないとフロントエンドからのリクエストが全て失敗する。
     </div>
 
     <pre><code>bundle install</code></pre>
+
+    <h3>RSpec + rspec-openapi 初期設定</h3>
+
+    <pre><code>rails generate rspec:install</code></pre>
+
+    <div class="file-label">backend/spec/rails_helper.rb（追加）</div>
+    <pre><code># rspec-openapi の設定
+RSpec::OpenAPI.path = 'doc/openapi.yaml'
+RSpec::OpenAPI.title = 'News Picker API'
+RSpec::OpenAPI.description = 'News Picker REST API specification'</code></pre>
+
+    <div class="why-box">
+      <code>rspec-openapi</code> は特別な設定なしでも動作するが、出力先を明示することで、フロントエンドの <code>generate:api</code> スクリプトと整合性が取れる。リクエストスペック（<code>spec/requests/</code>）を実行するとき、<code>OPENAPI=1 bundle exec rspec</code> で仕様書が更新される。
+    </div>
 
     <h3>データベース作成</h3>
     <pre><code># config/database.yml を環境に合わせて編集後:
@@ -179,7 +199,20 @@ npm install</code></pre>
   react-day-picker sonner lucide-react \
   clsx tailwind-merge class-variance-authority \
   @radix-ui/react-dialog @radix-ui/react-label \
-  @radix-ui/react-separator @radix-ui/react-slot @radix-ui/react-tooltip</code></pre>
+  @radix-ui/react-separator @radix-ui/react-slot @radix-ui/react-tooltip \
+  openapi-fetch openapi-react-query</code></pre>
+
+    <pre><code>npm install -D openapi-typescript</code></pre>
+
+    <div class="why-box">
+      <strong>OpenAPI関連パッケージ:</strong>
+      <ul style="margin-top:0.5rem">
+        <li><code>openapi-typescript</code>（devDependency）— OpenAPI仕様書からTypeScript型定義を自動生成するCLI</li>
+        <li><code>openapi-fetch</code> — 生成された型を使って型安全にAPI呼び出しするfetchラッパー</li>
+        <li><code>openapi-react-query</code> — openapi-fetchとTanStack Queryを統合し、<code>useQuery</code>/<code>useMutation</code>フックを自動生成</li>
+      </ul>
+      これらを使うことで、Rails側でAPIを変更 → RSpecテスト実行 → 型を再生成するだけでフロントの型が追従する。詳細は <a href="openapi-workflow.html" style="color: var(--accent);">OpenAPIワークフロー解説</a> を参照。
+    </div>
 
     <h3>Tailwind CSS 4 セットアップ</h3>
     <pre><code>npm install -D tailwindcss @tailwindcss/vite</code></pre>
@@ -209,6 +242,21 @@ export default defineConfig({
 
     <p>必要なコンポーネントを追加（既存プロジェクトで使っているもの）:</p>
     <pre><code>npx shadcn@latest add button card dialog input label separator tooltip</code></pre>
+
+    <h3>OpenAPI型生成スクリプトの追加</h3>
+
+    <div class="file-label">frontend/package.json（scriptsに追加）</div>
+    <pre><code>{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "generate:api": "openapi-typescript ../backend/doc/openapi.yaml -o src/lib/api/v1.d.ts"
+  }
+}</code></pre>
+
+    <div class="why-box">
+      <code>generate:api</code> スクリプトは、バックエンドのOpenAPI仕様書（<code>rspec-openapi</code>で生成されるYAML）からTypeScript型定義を自動生成する。Step 2以降でRSpecテストを書いてAPIを実装するたびに、<code>npm run generate:api</code> を実行するだけでフロントの型が最新化される。
+    </div>
 
     <h3>疎通確認: Railsへのfetchテスト</h3>
 
