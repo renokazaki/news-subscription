@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 4: ニュースデータ & ダッシュボード | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .step-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .goal-box { background: var(--surface); border-left: 4px solid var(--green); padding: 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin-bottom: 2rem; }
+    .goal-box h3 { margin-top: 0; color: var(--green); }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
+    .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
+    .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>Step 4: ニュースデータ & ダッシュボード</h1>
+    <p class="step-meta">所要時間: 1〜2日 | フィルタリングAPI + レイアウト構成</p>
+
+    <div class="goal-box">
+      <h3>このStepのゴール</h3>
+      <p>ニュース一覧がフィルタリング（日付・Interest）付きで表示され、詳細画面へ遷移できる。DashboardLayoutにSidebar + Header + コンテンツエリアが構成される。</p>
+    </div>
+
+    <h2>4-1. News モデル <span class="section-tag tag-rails">Rails</span></h2>
+
+    <pre><code>rails generate model News user:references title:string text:text url:string tag:string published_at:datetime
+rails db:migrate</code></pre>
+
+    <div class="file-label">backend/app/models/news.rb</div>
+    <pre><code>class News &lt; ApplicationRecord
+  belongs_to :user
+
+  validates :title, :url, presence: true
+
+  scope :by_date, -&gt;(date) { where('DATE(published_at) = ?', date) if date.present? }
+  scope :by_tag, -&gt;(tag) { where(tag: tag) if tag.present? }
+  scope :recent, -&gt; { order(published_at: :desc) }
+end</code></pre>
+
+    <div class="why-box">
+      <strong>scope</strong> はActiveRecordのクエリをメソッドチェーンで組み合わせ可能にする仕組み。条件付きscope（<code>if date.present?</code>）は、パラメータがない時はそのscopeを無視してくれるので、コントローラー側で条件分岐を書く必要がない。<br><br>
+      <code>News.recent.by_date('2024-01-01').by_tag('React')</code> のようにチェーンでき、SQL発行は1回だけ。各scopeが独立しているのでテストも容易。
+    </div>
+
+    <div class="warn-box">
+      テーブル名が <code>news</code>（不可算名詞）のため、Railsの自動命名規則と微妙にズレる場合がある。<code>rails generate model News</code> で生成した場合は問題ないが、手動で作る場合は <code>self.table_name = 'news'</code> をモデルに明記する。
+    </div>
+
+    <h2>4-2. News コントローラー <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/app/controllers/api/v1/news_controller.rb</div>
+    <pre><code>module Api
+  module V1
+    class NewsController &lt; ApplicationController
+      before_action :authenticate_user!
+
+      def index
+        news = current_user.news
+                  .recent
+                  .by_date(params[:date])
+                  .by_tag(params[:tag])
+
+        render json: news.map { |n| news_summary(n) }
+      end
+
+      def show
+        news_item = current_user.news.find(params[:id])
+        render json: news_detail(news_item)
+      end
+
+      private
+
+      def news_summary(news)
+        {
+          id: news.id,
+          title: news.title,
+          tag: news.tag,
+          published_at: news.published_at,
+          url: news.url
+        }
+      end
+
+      def news_detail(news)
+        {
+          id: news.id,
+          title: news.title,
+          text: news.text,
+          tag: news.tag,
+          url: news.url,
+          published_at: news.published_at
+        }
+      end
+    end
+  end
+end</code></pre>
+
+    <div class="why-box">
+      <strong>indexとshowでレスポンス形式を分ける理由:</strong> 一覧表示では <code>text</code>（要約本文）は不要。大量のニュースを一覧取得する際にテキスト全文を含めるとレスポンスサイズが肥大化し、パフォーマンスが悪化する。詳細画面で初めて全文を返す設計。
+    </div>
+
+    <div class="why-box">
+      <strong>フィルタリングをサーバーサイドにする理由:</strong> 旧実装ではクライアントで全件取得してからJSでフィルタしていた。データ量が少ないうちは問題ないが、ニュースが数百件になるとフロントのメモリと初回ロード時間が問題になる。DBのWHERE句は数万件でも高速に動作する。
+    </div>
+
+    <h3>ルーティング追加</h3>
+
+    <div class="file-label">backend/config/routes.rb（差分追加）</div>
+    <pre><code>resources :news, only: [:index, :show]</code></pre>
+
+    <h2>4-3. シードデータ（開発用） <span class="section-tag tag-rails">Rails</span></h2>
+
+    <p>フロントエンド開発を進めるために、テストデータを投入する:</p>
+
+    <div class="file-label">backend/db/seeds.rb</div>
+    <pre><code>user = User.find_or_create_by!(email: 'dev@example.com') do |u|
+  u.password = 'password123'
+  u.display_name = 'Dev User'
+end
+
+['React', 'Rails', 'AWS'].each do |keyword|
+  interest = user.interests.find_or_create_by!(keyword: keyword)
+
+  5.times do |i|
+    user.news.create!(
+      title: "#{keyword}に関するニュース #{i + 1}",
+      text: "#{keyword}の最新動向について。これはテスト用の要約テキストです。",
+      url: "https://example.com/#{keyword.downcase}/#{i + 1}",
+      tag: keyword,
+      published_at: i.days.ago
+    )
+  end
+end
+
+puts "Seed data created: #{User.count} users, #{Interest.count} interests, #{News.count} news"</code></pre>
+
+    <pre><code>rails db:seed</code></pre>
+
+    <div class="why-box">
+      <code>find_or_create_by!</code> を使うことで、seedを何度実行しても同じデータが重複作成されない（冪等性）。開発中にDBをリセットせずseedを再実行できるので便利。
+    </div>
+
+    <h2>4-4. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <pre><code># 全件取得
+curl http://localhost:3000/api/v1/news \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 日付フィルタ
+curl "http://localhost:3000/api/v1/news?date=2024-06-15" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# タグフィルタ
+curl "http://localhost:3000/api/v1/news?tag=React" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 複合フィルタ
+curl "http://localhost:3000/api/v1/news?date=2024-06-15&amp;tag=React" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 詳細取得
+curl http://localhost:3000/api/v1/news/1 \
+  -H "Authorization: Bearer YOUR_TOKEN"</code></pre>
+
+    <!-- ==================== Frontend ==================== -->
+    <h2>4-5. フロントエンド: useNews フック <span class="section-tag tag-react">React</span></h2>
+
+    <div class="file-label">frontend/src/hooks/useNews.ts</div>
+    <pre><code>import { useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import type { NewsItem, NewsDetail } from '../types';
+
+interface NewsFilters {
+  date?: string;   // "YYYY-MM-DD"
+  tag?: string;
+}
+
+export const useNews = (filters?: NewsFilters) =&gt; {
+  return useQuery({
+    queryKey: ['news', filters],
+    queryFn: () =&gt; {
+      const params = new URLSearchParams();
+      if (filters?.date) params.set('date', filters.date);
+      if (filters?.tag) params.set('tag', filters.tag);
+      const query = params.toString();
+      return api&lt;NewsItem[]&gt;(`/news${query ? `?${query}` : ''}`);
+    },
+  });
+};
+
+export const useNewsDetail = (id: string) =&gt; {
+  return useQuery({
+    queryKey: ['news', id],
+    queryFn: () =&gt; api&lt;NewsDetail&gt;(`/news/${id}`),
+    enabled: !!id,
+  });
+};</code></pre>
+
+    <div class="why-box">
+      <code>queryKey: ['news', filters]</code> — filtersオブジェクトをキーに含めることで、フィルタが変わるたびに自動的に再フェッチされる。同じフィルタ条件の結果はキャッシュから返される。TanStack Queryがオブジェクトの深い比較をしてくれるので、参照の一致を気にする必要がない。
+    </div>
+
+    <h2>4-6. フロントエンド: Dashboard レイアウト設計 <span class="section-tag tag-react">React</span></h2>
+
+    <p>React Router v7のネストレイアウトで構成:</p>
+
+    <pre><code>// ルート構成（再掲）
+{
+  element: &lt;AuthGuard /&gt;,        // 認証チェック
+  children: [{
+    element: &lt;DashboardLayout /&gt;, // Sidebar + Header + Outlet
+    children: [
+      { path: '/dashboard', element: &lt;DashboardPage /&gt; },
+    ],
+  }],
+}
+
+// DashboardLayout.tsx の構造
+&lt;div className="flex h-screen"&gt;
+  &lt;Sidebar /&gt;                {/* Interest一覧 + Calendar */}
+  &lt;div className="flex-1 flex flex-col"&gt;
+    &lt;Header /&gt;               {/* ユーザーメニュー */}
+    &lt;main className="flex-1 overflow-auto p-6"&gt;
+      &lt;Outlet /&gt;             {/* NewsList が入る */}
+    &lt;/main&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+    <h3>フィルタ状態の管理</h3>
+
+    <pre><code>// Jotai atom でUIローカル状態を管理
+// selectedDateAtom: カレンダーで選択した日付
+// selectedInterestAtom: サイドバーで選択したInterest
+
+// DashboardPage でこれらをuseNewsに渡す:
+const [selectedDate] = useAtom(selectedDateAtom);
+const [selectedInterest] = useAtom(selectedInterestAtom);
+
+const { data: news, isLoading } = useNews({
+  date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
+  tag: selectedInterest,
+});</code></pre>
+
+    <div class="why-box">
+      フィルタ状態（UI状態）は Jotai、サーバーデータ（ニュース一覧）は TanStack Query で管理する。この分離が重要: Jotaiのatomが変わる → useNewsのfiltersパラメータが変わる → queryKeyが変わる → 自動再フェッチ。明示的に「再取得」ロジックを書く必要がない。
+    </div>
+
+    <h2>4-7. 動作確認チェックリスト</h2>
+    <ol>
+      <li>ダッシュボードにニュース一覧が表示される</li>
+      <li>カレンダーで日付選択 → その日のニュースだけ表示される</li>
+      <li>サイドバーでInterest選択 → そのタグのニュースだけ表示される</li>
+      <li>ニュースカードクリック → <code>/news/:id</code> に遷移し詳細が表示される</li>
+      <li>フィルタ解除 → 全件に戻る</li>
+      <li>未認証でダッシュボードURL直アクセス → ログインページにリダイレクト</li>
+    </ol>
+
+    <div class="nav-footer">
+      <a href="step3-interest-crud.html">← Step 3: Interest CRUD</a>
+      <a href="step5-background-jobs.html">Step 5: バックグラウンドジョブ →</a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 3: Interest CRUD | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .step-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .goal-box { background: var(--surface); border-left: 4px solid var(--green); padding: 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin-bottom: 2rem; }
+    .goal-box h3 { margin-top: 0; color: var(--green); }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
+    .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
+    .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>Step 3: Interest CRUD</h1>
+    <p class="step-meta">所要時間: 1日 | RESTful APIとTanStack Query mutationの基本パターン</p>
+
+    <div class="goal-box">
+      <h3>このStepのゴール</h3>
+      <p>ユーザーがキーワード（Interest）を登録・編集・削除でき、一覧表示される。バックエンドはRESTful CRUD、フロントエンドはTanStack Queryでサーバー状態を管理する。</p>
+    </div>
+
+    <h2>3-1. Interest モデル <span class="section-tag tag-rails">Rails</span></h2>
+
+    <pre><code>rails generate model Interest user:references keyword:string
+rails db:migrate</code></pre>
+
+    <div class="why-box">
+      <code>user:references</code> を指定すると、マイグレーションに <code>t.references :user, null: false, foreign_key: true</code> が自動生成される。これにより:
+      <ul style="margin-top:0.5rem">
+        <li>DB レベルで外部キー制約がつく（存在しないユーザーIDを挿入できなくなる）</li>
+        <li><code>user_id</code> にインデックスが自動追加される（JOINやWHEREが高速化）</li>
+        <li>モデルに <code>belongs_to :user</code> が自動追記される</li>
+      </ul>
+    </div>
+
+    <div class="file-label">backend/app/models/interest.rb</div>
+    <pre><code>class Interest &lt; ApplicationRecord
+  belongs_to :user
+
+  validates :keyword, presence: true, length: { maximum: 20 }
+  validates :keyword, uniqueness: { scope: :user_id, message: "は既に登録されています" }
+end</code></pre>
+
+    <div class="why-box">
+      <code>uniqueness: { scope: :user_id }</code> — 同一ユーザー内でのキーワード重複を防ぐ。異なるユーザー間では同じキーワードを許可する。<code>scope</code> を使わないとシステム全体で1つのキーワードしか登録できなくなってしまう。
+    </div>
+
+    <h3>Userモデルへの関連追加（確認）</h3>
+
+    <div class="file-label">backend/app/models/user.rb（Step 2で追加済み）</div>
+    <pre><code>has_many :interests, dependent: :destroy</code></pre>
+
+    <div class="why-box">
+      <code>dependent: :destroy</code> — ユーザーが削除されたとき、そのユーザーのInterestも全て削除する。これがないと、存在しないユーザーを参照する「孤児レコード」がDBに残り続ける。
+    </div>
+
+    <h2>3-2. Interests コントローラー <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/app/controllers/api/v1/interests_controller.rb</div>
+    <pre><code>module Api
+  module V1
+    class InterestsController &lt; ApplicationController
+      before_action :authenticate_user!
+      before_action :set_interest, only: [:update, :destroy]
+
+      def index
+        interests = current_user.interests.order(created_at: :desc)
+        render json: interests.map { |i| interest_response(i) }
+      end
+
+      def create
+        interest = current_user.interests.build(interest_params)
+
+        if interest.save
+          render json: interest_response(interest), status: :created
+        else
+          render json: { errors: interest.errors.full_messages }, status: :unprocessable_entity
+        end
+      end
+
+      def update
+        if @interest.update(interest_params)
+          render json: interest_response(@interest)
+        else
+          render json: { errors: @interest.errors.full_messages }, status: :unprocessable_entity
+        end
+      end
+
+      def destroy
+        @interest.destroy!
+        head :no_content
+      end
+
+      private
+
+      def set_interest
+        @interest = current_user.interests.find(params[:id])
+      end
+
+      def interest_params
+        params.require(:interest).permit(:keyword)
+      end
+
+      def interest_response(interest)
+        {
+          id: interest.id,
+          keyword: interest.keyword,
+          created_at: interest.created_at
+        }
+      end
+    end
+  end
+end</code></pre>
+
+    <h3>コード解説（重要ポイント）</h3>
+
+    <div class="why-box">
+      <strong><code>before_action :authenticate_user!</code></strong> — 全アクションの前に認証チェックを実行。未認証なら401が返り、コントローラーのアクション本体は実行されない。
+    </div>
+
+    <div class="why-box">
+      <strong><code>current_user.interests.build(...)</code></strong> — <code>Interest.new(user_id: current_user.id, ...)</code> と同じだが、関連を通じて生成することで:
+      <ul style="margin-top:0.5rem">
+        <li><code>user_id</code> が自動設定される（手動設定忘れを防ぐ）</li>
+        <li>他人のuser_idを指定するような不正を防げる</li>
+      </ul>
+    </div>
+
+    <div class="why-box">
+      <strong><code>current_user.interests.find(params[:id])</code></strong> — これが認可（Authorization）の実装。<code>Interest.find(params[:id])</code> だと他人のInterestも取得できてしまうが、<code>current_user.interests.find</code> はそのユーザーのInterestしか検索しない。見つからなければ <code>ActiveRecord::RecordNotFound</code> → 404 が返る。
+    </div>
+
+    <div class="why-box">
+      <strong><code>head :no_content</code></strong> — DELETE成功時にボディなしの204を返す。REST慣例で「削除成功・返すべきデータなし」を示す。200 + JSONでも動くが、レスポンスボディが不要な場合に204を使うのがRESTful。
+    </div>
+
+    <h3>ルーティング追加</h3>
+
+    <div class="file-label">backend/config/routes.rb（差分追加）</div>
+    <pre><code>namespace :api do
+  namespace :v1 do
+    # ... 既存の auth ルート ...
+    resources :interests, only: [:index, :create, :update, :destroy]
+  end
+end</code></pre>
+
+    <div class="why-box">
+      <code>resources :interests, only: [...]</code> — RESTfulルーティングの宣言。<code>only</code> で必要なアクションだけに限定する。<code>:show</code> を含めていないのは、Interest単体の詳細表示画面が不要なため。不要なルートを公開しないのはセキュリティの基本。
+    </div>
+
+    <h2>3-3. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <pre><code># Interest作成
+curl -X POST http://localhost:3000/api/v1/interests \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"interest": {"keyword": "TypeScript"}}'
+
+# 一覧取得
+curl http://localhost:3000/api/v1/interests \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 更新
+curl -X PATCH http://localhost:3000/api/v1/interests/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"interest": {"keyword": "React"}}'
+
+# 削除
+curl -X DELETE http://localhost:3000/api/v1/interests/1 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+# => 204 No Content</code></pre>
+
+    <!-- ==================== Frontend ==================== -->
+    <h2>3-4. フロントエンド: TanStack Query フック <span class="section-tag tag-react">React</span></h2>
+
+    <p>Server Actions から TanStack Query への移行パターン:</p>
+
+    <h3>移行前（Next.js Server Actions）</h3>
+    <pre><code>// Before: Server Action
+"use server"
+export async function postInterestAction(keyword: string) {
+  await prisma.interest.create({ data: { keyword, userId } });
+  revalidatePath("/dashboard");
+}</code></pre>
+
+    <h3>移行後（TanStack Query useMutation）</h3>
+
+    <div class="file-label">frontend/src/hooks/useInterests.ts</div>
+    <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import type { Interest } from '../types';
+
+export const useInterests = () =&gt; {
+  return useQuery({
+    queryKey: ['interests'],
+    queryFn: () =&gt; api&lt;Interest[]&gt;('/interests'),
+  });
+};
+
+export const useCreateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyword: string) =&gt;
+      api&lt;Interest&gt;('/interests', {
+        method: 'POST',
+        body: JSON.stringify({ interest: { keyword } }),
+      }),
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['interests'] });
+    },
+  });
+};
+
+export const useUpdateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, keyword }: { id: number; keyword: string }) =&gt;
+      api&lt;Interest&gt;(`/interests/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ interest: { keyword } }),
+      }),
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['interests'] });
+    },
+  });
+};
+
+export const useDeleteInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =&gt;
+      api(`/interests/${id}`, { method: 'DELETE' }),
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['interests'] });
+    },
+  });
+};</code></pre>
+
+    <div class="why-box">
+      <strong>移行パターン:</strong> Next.jsの <code>revalidatePath()</code> は「このパスのキャッシュを無効化して再フェッチ」の意味。TanStack Queryでは <code>invalidateQueries()</code> が同等の役割を果たす。mutation成功時に <code>invalidateQueries</code> を呼ぶことで、画面が自動的に最新データに更新される。
+    </div>
+
+    <h2>3-5. フロントエンド: UIコンポーネント（概要） <span class="section-tag tag-react">React</span></h2>
+
+    <p>Interest管理UIのポイントだけ整理:</p>
+
+    <ul>
+      <li>作成/編集は <code>react-hook-form</code> + <code>zod</code> バリデーション</li>
+      <li>削除は確認ダイアログ（shadcn/ui <code>AlertDialog</code>）を挟む</li>
+      <li><code>useMutation</code> の <code>isPending</code> でボタンのローディング状態を表示</li>
+      <li>エラー時は <code>sonner</code> の toast でユーザーに通知</li>
+    </ul>
+
+    <pre><code>// 使い方の例
+const { mutate, isPending } = useCreateInterest();
+
+const onSubmit = (data: { keyword: string }) =&gt; {
+  mutate(data.keyword, {
+    onSuccess: () =&gt; toast.success('登録しました'),
+    onError: (err) =&gt; toast.error(err.message),
+  });
+};</code></pre>
+
+    <h2>3-6. 動作確認チェックリスト</h2>
+    <ol>
+      <li>Interest作成 → 一覧に即反映される</li>
+      <li>20文字超のキーワード → バリデーションエラーが返る</li>
+      <li>重複キーワード → エラーメッセージが表示される</li>
+      <li>他ユーザーのInterest → 404が返る（取得も更新も削除もできない）</li>
+      <li>未認証 → 401が返る</li>
+    </ol>
+
+    <div class="nav-footer">
+      <a href="step2-authentication.html">← Step 2: 認証システム</a>
+      <a href="step4-news-dashboard.html">Step 4: ニュース & ダッシュボード →</a>
+    </div>
+  </div>
+</body>
+</html>

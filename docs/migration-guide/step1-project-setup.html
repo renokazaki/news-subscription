@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 1: プロジェクト基盤セットアップ | News Picker 移行ガイド</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-hover: #334155;
+      --border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --rails-red: #cc0000;
+      --react-blue: #61dafb;
+      --green: #4ade80;
+      --yellow: #fbbf24;
+      --code-bg: #0d1117;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .step-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .goal-box { background: var(--surface); border-left: 4px solid var(--green); padding: 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin-bottom: 2rem; }
+    .goal-box h3 { margin-top: 0; color: var(--green); }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
+    .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
+    .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>Step 1: プロジェクト基盤セットアップ</h1>
+    <p class="step-meta">所要時間: 1〜2日 | Rails + React の土台を一気に作る</p>
+
+    <div class="goal-box">
+      <h3>このStepのゴール</h3>
+      <p>モノレポ構成で <code>backend/</code>(Rails API) と <code>frontend/</code>(React + Vite) が起動し、双方から疎通確認できる状態を作る。</p>
+    </div>
+
+    <!-- ==================== Rails Section ==================== -->
+    <h2>1-1. モノレポ構造の作成 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <p>まず、プロジェクトルートとなるディレクトリを作成します。</p>
+
+    <pre><code>mkdir News-Picker
+cd News-Picker
+git init</code></pre>
+
+    <div class="why-box">
+      フロントエンドとバックエンドを1つのリポジトリで管理する「モノレポ」構成にすることで、PRを1つにまとめられる・環境構築が一発で済む・フロントとバックの変更を同期しやすいというメリットがある。
+    </div>
+
+    <h2>1-2. Rails API-only プロジェクト初期化 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <pre><code>rails new backend --api --database=postgresql --skip-test</code></pre>
+
+    <h3>各オプションの意味</h3>
+    <ul>
+      <li><code>--api</code>: View層（ERB, Asset Pipeline）を省略し、APIに特化した軽量構成を生成。<code>ActionController::API</code>を基底クラスにする</li>
+      <li><code>--database=postgresql</code>: デフォルトのSQLiteではなくPostgreSQLを使用。本番環境と同じDBを開発でも使い、DB固有の挙動差を避ける</li>
+      <li><code>--skip-test</code>: デフォルトのMiniTestを使わず、後でRSpecを導入するため</li>
+    </ul>
+
+    <div class="why-box">
+      <code>--api</code>フラグが重要。通常のRailsはブラウザ向けにセッション・Cookie・CSRF保護・View層を含むが、API-onlyモードではこれらを除外し、JSONのやり取りに最適化されたミドルウェアスタックを生成する。フロントエンドを別で持つ構成ではこれが正しい選択。
+    </div>
+
+    <h3>生成された構成を確認</h3>
+    <pre><code>cd backend
+ls -la app/controllers/
+# application_controller.rb が ActionController::API を継承していることを確認</code></pre>
+
+    <div class="file-label">backend/app/controllers/application_controller.rb</div>
+    <pre><code>class ApplicationController &lt; ActionController::API
+  # ActionController::Base ではなく ::API を継承
+  # これにより Cookie/Session/CSRF のミドルウェアが自動では読み込まれない
+end</code></pre>
+
+    <h3>Gemfileの初期調整</h3>
+
+    <div class="file-label">backend/Gemfile（追加）</div>
+    <pre><code># API
+gem 'rack-cors'           # CORSヘッダー管理（フロントエンドからのリクエスト許可に必須）
+gem 'jsonapi-serializer'  # JSON出力の整形。レスポンス形式を統一する
+
+# Background Jobs
+gem 'sidekiq'             # 非同期ジョブ処理（Redis使用）
+gem 'sidekiq-scheduler'   # cron的な定期実行
+
+# HTTP Client
+gem 'faraday'             # 外部API呼び出し用。Net::HTTPより扱いやすい
+
+# Auth
+gem 'devise'              # 認証フレームワーク
+
+# Development
+gem 'rspec-rails', group: [:development, :test]
+gem 'factory_bot_rails', group: [:development, :test]</code></pre>
+
+    <div class="why-box">
+      <code>rack-cors</code> は必須。ブラウザはセキュリティのためオリジン（ドメイン）が異なるリクエストをデフォルトでブロックする（Same-Origin Policy）。Rails APIが <code>localhost:3000</code>、ReactがVite dev serverの <code>localhost:5173</code> で動くため、CORSヘッダーを返さないとフロントエンドからのリクエストが全て失敗する。
+    </div>
+
+    <pre><code>bundle install</code></pre>
+
+    <h3>データベース作成</h3>
+    <pre><code># config/database.yml を環境に合わせて編集後:
+rails db:create</code></pre>
+
+    <h3>動作確認用エンドポイントの追加</h3>
+
+    <div class="file-label">backend/config/routes.rb</div>
+    <pre><code>Rails.application.routes.draw do
+  namespace :api do
+    namespace :v1 do
+      get 'health', to: 'health#show'
+    end
+  end
+end</code></pre>
+
+    <div class="file-label">backend/app/controllers/api/v1/health_controller.rb</div>
+    <pre><code>module Api
+  module V1
+    class HealthController &lt; ApplicationController
+      def show
+        render json: { status: 'ok', timestamp: Time.current }
+      end
+    end
+  end
+end</code></pre>
+
+    <div class="why-box">
+      <code>namespace :api do namespace :v1</code> でURL名前空間を切る理由: API仕様が変わった時に <code>/api/v2</code> を並行稼働させてクライアントを段階移行できる。また、コントローラーファイルも <code>app/controllers/api/v1/</code> にディレクトリ分けされるので整理しやすい。
+    </div>
+
+    <pre><code>rails s -p 3000
+# 別ターミナルで:
+curl http://localhost:3000/api/v1/health
+# => {"status":"ok","timestamp":"2024-..."}</code></pre>
+
+    <!-- ==================== React Section ==================== -->
+    <h2>1-3. React + Vite プロジェクト初期化 <span class="section-tag tag-react">React</span></h2>
+
+    <p>プロジェクトルートに戻り:</p>
+
+    <pre><code>cd ../  # News-Picker/ に戻る
+npm create vite@latest frontend -- --template react-ts
+cd frontend
+npm install</code></pre>
+
+    <h3>追加パッケージのインストール</h3>
+    <pre><code>npm install react-router@7 @tanstack/react-query jotai \
+  react-hook-form @hookform/resolvers zod \
+  react-day-picker sonner lucide-react \
+  clsx tailwind-merge class-variance-authority \
+  @radix-ui/react-dialog @radix-ui/react-label \
+  @radix-ui/react-separator @radix-ui/react-slot @radix-ui/react-tooltip</code></pre>
+
+    <h3>Tailwind CSS 4 セットアップ</h3>
+    <pre><code>npm install -D tailwindcss @tailwindcss/vite</code></pre>
+
+    <div class="file-label">frontend/vite.config.ts（差分）</div>
+    <pre><code>import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),  // 追加
+  ],
+})</code></pre>
+
+    <div class="file-label">frontend/src/index.css</div>
+    <pre><code>@import "tailwindcss";</code></pre>
+
+    <h3>shadcn/ui セットアップ</h3>
+    <pre><code>npx shadcn@latest init</code></pre>
+
+    <p>設問に以下のように回答:</p>
+    <ul>
+      <li>Style: Default</li>
+      <li>Base color: Slate</li>
+      <li>CSS variables: Yes</li>
+    </ul>
+
+    <p>必要なコンポーネントを追加（既存プロジェクトで使っているもの）:</p>
+    <pre><code>npx shadcn@latest add button card dialog input label separator tooltip</code></pre>
+
+    <h3>疎通確認: Railsへのfetchテスト</h3>
+
+    <div class="file-label">frontend/src/App.tsx（一時的なテスト）</div>
+    <pre><code>import { useEffect, useState } from 'react'
+
+function App() {
+  const [status, setStatus] = useState('loading...')
+
+  useEffect(() => {
+    fetch('http://localhost:3000/api/v1/health')
+      .then(res => res.json())
+      .then(data => setStatus(data.status))
+      .catch(() => setStatus('error - CORS?'))
+  }, [])
+
+  return &lt;div className="p-8"&gt;
+    &lt;h1 className="text-2xl font-bold"&gt;API Status: {status}&lt;/h1&gt;
+  &lt;/div&gt;
+}
+export default App</code></pre>
+
+    <pre><code>npm run dev
+# http://localhost:5173 を開いて "API Status: ok" が表示されれば成功
+# "error - CORS?" が出たら次のCORS設定が必要</code></pre>
+
+    <!-- ==================== CORS ==================== -->
+    <h2>1-4. CORS 初期設定 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/config/initializers/cors.rb</div>
+    <pre><code>Rails.application.config.middleware.insert_before 0, Rack::Cors do
+  allow do
+    origins 'http://localhost:5173'  # Vite dev server
+
+    resource '*',
+      headers: :any,
+      methods: [:get, :post, :put, :patch, :delete, :options, :head],
+      credentials: true
+  end
+end</code></pre>
+
+    <div class="why-box">
+      <code>insert_before 0</code> でミドルウェアスタックの一番先頭に挿入する。CORSのプリフライトリクエスト（OPTIONS）に対して、他のミドルウェアが先に401を返してしまわないようにするため。<br><br>
+      <code>credentials: true</code> はCookieベースのセッションを使う場合に必要。トークン認証だけなら不要だが、将来の拡張性のために入れておく。
+    </div>
+
+    <p>Railsサーバーを再起動して、Reactアプリで "ok" が表示されることを確認。</p>
+
+    <!-- ==================== Directory structure ==================== -->
+    <h2>1-5. ディレクトリ構成の最終確認</h2>
+
+    <pre><code>News-Picker/
+├── frontend/          # React + Vite (port 5173)
+│   ├── src/
+│   │   ├── components/ui/  # shadcn/uiコンポーネント
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   └── vite.config.ts
+├── backend/           # Rails API (port 3000)
+│   ├── app/
+│   │   └── controllers/api/v1/health_controller.rb
+│   ├── config/
+│   │   ├── routes.rb
+│   │   └── initializers/cors.rb
+│   ├── Gemfile
+│   └── ...
+└── README.md</code></pre>
+
+    <h2>1-6. 動作確認チェックリスト</h2>
+    <ol>
+      <li><code>rails s -p 3000</code> でRailsが起動する</li>
+      <li><code>curl localhost:3000/api/v1/health</code> でJSON応答がある</li>
+      <li><code>npm run dev</code> でVite dev serverが起動する</li>
+      <li>ブラウザで <code>localhost:5173</code> を開き、RailsからのAPI応答が表示される</li>
+      <li>shadcn/uiのButtonコンポーネントが正しくスタイルされている</li>
+    </ol>
+
+    <div class="nav-footer">
+      <a href="index.html">← ガイド一覧</a>
+      <a href="step2-authentication.html">Step 2: 認証システム →</a>
+    </div>
+  </div>
+</body>
+</html>
