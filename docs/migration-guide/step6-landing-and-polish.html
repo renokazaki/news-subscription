@@ -132,6 +132,11 @@
           <td class="arrow">→</td>
           <td>不要（SPAではサーバーレンダリングしない）</td>
         </tr>
+        <tr>
+          <td>手動 <code>useQuery</code> / <code>useMutation</code></td>
+          <td class="arrow">→</td>
+          <td><code>$api.useQuery</code> / <code>$api.useMutation</code>（OpenAPI自動生成）</td>
+        </tr>
       </tbody>
     </table>
 
@@ -278,6 +283,7 @@ const queryClient = new QueryClient({
       <li>API エラー時にtoast通知が表示される</li>
       <li>モバイル表示でサイドバーが正しく開閉する</li>
       <li><code>npm run build</code> がエラーなく完了する</li>
+      <li><code>OPENAPI=1 bundle exec rspec</code> でOpenAPI仕様書が最新化され、<code>npm run generate:api</code> で型エラーが出ない</li>
     </ol>
 
     <div class="nav-footer">

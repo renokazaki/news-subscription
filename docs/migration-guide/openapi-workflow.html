@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAPI ワークフロー解説 | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; --purple: #8b5cf6; --orange: #f97316; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .page-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .tip-box::before { content: "📝 Tips"; display: block; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; white-space: pre; overflow-x: auto; line-height: 1.4; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
+    .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
+    .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+    .tag-both { background: rgba(74, 222, 128, 0.1); color: var(--green); border: 1px solid rgba(74, 222, 128, 0.2); }
+    .compare-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    .compare-table th, .compare-table td { padding: 0.75rem; text-align: left; border: 1px solid var(--border); }
+    .compare-table th { background: var(--surface); color: var(--accent); }
+    .compare-table td { background: var(--code-bg); }
+    .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem 1.5rem; margin-bottom: 2rem; }
+    .toc h3 { margin-top: 0; margin-bottom: 0.75rem; color: var(--text-muted); font-size: 0.9rem; }
+    .toc ol { margin: 0; padding-left: 1.25rem; }
+    .toc li { margin-bottom: 0.3rem; }
+    .toc a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>OpenAPI ワークフロー解説</h1>
+    <p class="page-meta">RSpecからAPI仕様を自動生成し、フロントエンドの型・フックを自動生成するパイプライン</p>
+
+    <div class="toc">
+      <h3>目次</h3>
+      <ol>
+        <li><a href="#overview">全体像: なぜOpenAPIを導入するのか</a></li>
+        <li><a href="#pipeline">パイプライン: RSpec → OpenAPI → TypeScript</a></li>
+        <li><a href="#rspec-openapi">rspec-openapi: テストからAPI仕様を自動生成</a></li>
+        <li><a href="#openapi-typescript">openapi-typescript: 型の自動生成</a></li>
+        <li><a href="#openapi-fetch">openapi-fetch: 型安全なfetchクライアント</a></li>
+        <li><a href="#openapi-react-query">openapi-react-query: TanStack Queryフック自動生成</a></li>
+        <li><a href="#dev-workflow">開発ワークフロー</a></li>
+        <li><a href="#comparison">手動実装との比較</a></li>
+      </ol>
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="overview">1. 全体像: なぜOpenAPIを導入するのか</h2>
+
+    <p>従来のSPA + API開発では、バックエンドのエンドポイントを変更するたびにフロントエンドの型定義やAPIクライアントを手動で同期する必要がある。これは:</p>
+
+    <ul>
+      <li><strong>型の不整合</strong>: バックエンドのレスポンスにフィールドを追加しても、フロントの型定義が古いまま</li>
+      <li><strong>手動メンテナンスの負担</strong>: エンドポイントが増えるたびに useQuery / useMutation フックを手書き</li>
+      <li><strong>ドキュメントの腐敗</strong>: API仕様書を別途管理すると、コードとの乖離が蓄積する</li>
+    </ul>
+
+    <p>OpenAPIワークフローは、これを <strong>「テストが通る = 仕様書が最新 = フロントの型が正確」</strong> の状態に自動化する。</p>
+
+    <div class="flow-diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         開発ワークフロー                                  │
+│                                                                          │
+│  ① RSpec Request Spec を書く                                            │
+│     ┌─────────────────────────┐                                         │
+│     │ describe "POST /interests" do                                     │
+│     │   it "creates interest" do                                        │
+│     │     post api_v1_interests_path, ...                               │
+│     │   end                                                             │
+│     │ end                                                               │
+│     └──────────────┬──────────┘                                         │
+│                    │                                                     │
+│  ② bundle exec rspec（テスト実行）                                      │
+│                    │                                                     │
+│                    ▼                                                     │
+│     ┌──────────────────────────┐                                        │
+│     │ rspec-openapi が自動生成  │                                        │
+│     │ → doc/openapi.yaml       │  ← API仕様書（Single Source of Truth） │
+│     └──────────────┬───────────┘                                        │
+│                    │                                                     │
+│  ③ npx openapi-typescript（型生成）                                     │
+│                    │                                                     │
+│                    ▼                                                     │
+│     ┌──────────────────────────┐                                        │
+│     │ frontend/src/lib/api.d.ts│  ← TypeScript型定義                    │
+│     └──────────────┬───────────┘                                        │
+│                    │                                                     │
+│  ④ openapi-fetch + openapi-react-query で利用                           │
+│                    │                                                     │
+│                    ▼                                                     │
+│     ┌──────────────────────────────────────────┐                        │
+│     │ const { data } = useQuery(               │                        │
+│     │   client.queryOptions("get", "/news")    │  ← 型安全・自動補完    │
+│     │ );                                       │                        │
+│     └──────────────────────────────────────────┘                        │
+└──────────────────────────────────────────────────────────────────────────┘</div>
+
+    <!-- ============================= -->
+    <h2 id="pipeline">2. パイプライン: 使用するツール</h2>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>ツール</th>
+          <th>種類</th>
+          <th>役割</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>rspec-openapi</code></td>
+          <td>Ruby gem</td>
+          <td>RSpecのrequest specを実行し、リクエスト/レスポンスからOpenAPI仕様(YAML)を自動生成</td>
+        </tr>
+        <tr>
+          <td><code>openapi-typescript</code></td>
+          <td>npm (CLI)</td>
+          <td>OpenAPI YAMLからTypeScript型定義ファイル(.d.ts)を生成</td>
+        </tr>
+        <tr>
+          <td><code>openapi-fetch</code></td>
+          <td>npm (6KB)</td>
+          <td>生成された型を使った型安全なfetchクライアント。パス・メソッド・パラメータの型補完が効く</td>
+        </tr>
+        <tr>
+          <td><code>openapi-react-query</code></td>
+          <td>npm</td>
+          <td>openapi-fetchをTanStack Queryでラップ。useQuery/useMutationを型安全に呼び出せる</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      この4つは <strong>openapi-ts</strong> エコシステムとして同一のモノレポで管理されている。相互に設計されているため、バージョン不整合やAPIの食い違いが起きにくい。合計バンドルサイズも非常に軽量（openapi-fetchは6KB）。
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="rspec-openapi">3. rspec-openapi: テストからAPI仕様を自動生成 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <h3>インストール</h3>
+
+    <div class="file-label">backend/Gemfile（追加）</div>
+    <pre><code>group :test do
+  gem 'rspec-openapi'
+end</code></pre>
+
+    <pre><code>bundle install</code></pre>
+
+    <h3>設定</h3>
+
+    <div class="file-label">backend/spec/spec_helper.rb または rails_helper.rb（追加）</div>
+    <pre><code>RSpec::OpenAPI.path = 'doc/openapi.yaml'
+RSpec::OpenAPI.title = 'News Picker API'
+RSpec::OpenAPI.description = 'News Picker バックエンドAPI'
+RSpec::OpenAPI.servers = [{ url: 'http://localhost:3000' }]</code></pre>
+
+    <div class="why-box">
+      <strong>rspec-openapi の仕組み:</strong> RSpecのrequest specを実行する際に、実際のHTTPリクエスト/レスポンスを傍受（intercept）し、そこからOpenAPIスキーマを自動生成する。つまり <strong>テストが通るコードが仕様書になる</strong>。手動でYAMLを書く必要がない。<br><br>
+      「テスト = 仕様書」なので、テストが古ければ仕様も古い。テストを書く動機付けにもなる。
+    </div>
+
+    <h3>Request Spec の書き方</h3>
+
+    <p>rspec-openapi が正しくスキーマを生成するには、request specで実際のHTTPリクエスト/レスポンスを通す必要がある:</p>
+
+    <div class="file-label">backend/spec/requests/api/v1/interests_spec.rb</div>
+    <pre><code>require 'rails_helper'
+
+RSpec.describe 'Api::V1::Interests', type: :request do
+  let(:user) { create(:user) }
+  let(:token) { Warden::JWTAuth::UserEncoder.new.call(user, :user, nil).first }
+  let(:auth_headers) { { 'Authorization' => "Bearer #{token}" } }
+
+  describe 'GET /api/v1/interests' do
+    it 'returns user interests' do
+      create(:interest, user: user, keyword: 'React')
+      create(:interest, user: user, keyword: 'Rails')
+
+      get api_v1_interests_path, headers: auth_headers
+
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json.size).to eq(2)
+      expect(json.first).to include('id', 'keyword', 'created_at')
+    end
+  end
+
+  describe 'POST /api/v1/interests' do
+    it 'creates a new interest' do
+      post api_v1_interests_path,
+        params: { interest: { keyword: 'TypeScript' } },
+        headers: auth_headers.merge('Content-Type' => 'application/json'),
+        as: :json
+
+      expect(response).to have_http_status(:created)
+      json = JSON.parse(response.body)
+      expect(json['keyword']).to eq('TypeScript')
+    end
+
+    it 'returns validation errors for invalid input' do
+      post api_v1_interests_path,
+        params: { interest: { keyword: '' } },
+        headers: auth_headers.merge('Content-Type' => 'application/json'),
+        as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      json = JSON.parse(response.body)
+      expect(json['errors']).to be_present
+    end
+  end
+
+  describe 'PATCH /api/v1/interests/:id' do
+    let(:interest) { create(:interest, user: user, keyword: 'React') }
+
+    it 'updates the interest' do
+      patch api_v1_interest_path(interest),
+        params: { interest: { keyword: 'Vue' } },
+        headers: auth_headers,
+        as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)['keyword']).to eq('Vue')
+    end
+  end
+
+  describe 'DELETE /api/v1/interests/:id' do
+    let!(:interest) { create(:interest, user: user, keyword: 'React') }
+
+    it 'deletes the interest' do
+      delete api_v1_interest_path(interest), headers: auth_headers
+
+      expect(response).to have_http_status(:no_content)
+    end
+  end
+end</code></pre>
+
+    <div class="why-box">
+      <strong>成功ケースとエラーケースの両方を書く理由:</strong> rspec-openapi はレスポンスのステータスコードとボディからスキーマを生成するので、200系だけでなく 422（バリデーションエラー）や 401（認証エラー）のテストも書くと、エラーレスポンスのスキーマも仕様書に含まれる。フロントエンドで正確なエラー型が使える。
+    </div>
+
+    <h3>OpenAPI仕様の生成</h3>
+
+    <pre><code># 環境変数 OPENAPI=1 を付けてRSpec実行
+OPENAPI=1 bundle exec rspec
+
+# 生成されたファイルを確認
+cat doc/openapi.yaml</code></pre>
+
+    <p>出力例（一部）:</p>
+
+    <pre><code>openapi: 3.0.3
+info:
+  title: News Picker API
+paths:
+  /api/v1/interests:
+    get:
+      summary: returns user interests
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    keyword:
+                      type: string
+                    created_at:
+                      type: string
+    post:
+      summary: creates a new interest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                interest:
+                  type: object
+                  properties:
+                    keyword:
+                      type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  keyword:
+                    type: string
+                  created_at:
+                    type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string</code></pre>
+
+    <div class="tip-box">
+      <code>OPENAPI=1</code> を付けない通常の <code>bundle exec rspec</code> ではYAMLは生成されない。CIパイプラインでは常に付ける、ローカルでは必要な時だけ、という運用がおすすめ。
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="openapi-typescript">4. openapi-typescript: 型の自動生成 <span class="section-tag tag-react">React</span></h2>
+
+    <h3>インストール</h3>
+
+    <pre><code>cd frontend
+npm install -D openapi-typescript</code></pre>
+
+    <h3>型生成コマンド</h3>
+
+    <pre><code># backend の openapi.yaml から型を生成
+npx openapi-typescript ../backend/doc/openapi.yaml -o src/lib/api.d.ts</code></pre>
+
+    <div class="file-label">frontend/package.json（スクリプト追加）</div>
+    <pre><code>{
+  "scripts": {
+    "generate:api": "openapi-typescript ../backend/doc/openapi.yaml -o src/lib/api.d.ts",
+    "dev": "vite",
+    "build": "tsc && vite build"
+  }
+}</code></pre>
+
+    <p>生成される型定義ファイル（一部）:</p>
+
+    <div class="file-label">frontend/src/lib/api.d.ts（自動生成）</div>
+    <pre><code>export interface paths {
+  "/api/v1/interests": {
+    get: {
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              id: number;
+              keyword: string;
+              created_at: string;
+            }[];
+          };
+        };
+      };
+    };
+    post: {
+      requestBody: {
+        content: {
+          "application/json": {
+            interest: {
+              keyword: string;
+            };
+          };
+        };
+      };
+      responses: {
+        201: {
+          content: {
+            "application/json": {
+              id: number;
+              keyword: string;
+              created_at: string;
+            };
+          };
+        };
+        422: {
+          content: {
+            "application/json": {
+              errors: string[];
+            };
+          };
+        };
+      };
+    };
+  };
+  // ... 他のエンドポイントも同様に生成
+}</code></pre>
+
+    <div class="why-box">
+      <strong>手書き不要:</strong> バックエンドのレスポンス形式が変わったら、RSpecを更新 → テスト実行 → 型再生成するだけ。型が自動で同期されるので「フロントの型が古い」問題が根本解消される。TypeScriptコンパイラが不整合を検出してくれる。
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="openapi-fetch">5. openapi-fetch: 型安全なfetchクライアント <span class="section-tag tag-react">React</span></h2>
+
+    <h3>インストール</h3>
+
+    <pre><code>npm install openapi-fetch</code></pre>
+
+    <h3>クライアント設定</h3>
+
+    <div class="file-label">frontend/src/lib/client.ts</div>
+    <pre><code>import createClient from 'openapi-fetch';
+import type { paths } from './api.d.ts';
+
+function getToken(): string | null {
+  return localStorage.getItem('auth-token');
+}
+
+export function clearToken(): void {
+  localStorage.removeItem('auth-token');
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem('auth-token', token);
+}
+
+const client = createClient&lt;paths&gt;({
+  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+});
+
+// リクエストごとに認証ヘッダーを付与
+client.use({
+  async onRequest({ request }) {
+    const token = getToken();
+    if (token) {
+      request.headers.set('Authorization', `Bearer ${token}`);
+    }
+    return request;
+  },
+  async onResponse({ response }) {
+    if (response.status === 401) {
+      clearToken();
+      window.location.href = '/sign-in';
+    }
+    return response;
+  },
+});
+
+export default client;</code></pre>
+
+    <div class="why-box">
+      <strong><code>createClient&lt;paths&gt;</code></strong> — OpenAPIから生成した <code>paths</code> 型をジェネリクスとして渡す。これにより:
+      <ul style="margin-top:0.5rem">
+        <li><code>client.GET("/api/v1/interests")</code> → パスの自動補完が効く</li>
+        <li>存在しないパスを指定するとTypeScriptコンパイルエラーになる</li>
+        <li>レスポンスの型が <code>{ id: number, keyword: string, ... }</code> と自動推論される</li>
+        <li>リクエストボディの型もチェックされる</li>
+      </ul>
+    </div>
+
+    <h3>直接使う場合（useQueryなし）</h3>
+
+    <pre><code>// パスとメソッドに応じた型安全な呼び出し
+const { data, error } = await client.GET("/api/v1/interests");
+//     ^? { id: number; keyword: string; created_at: string }[]
+
+const { data } = await client.POST("/api/v1/interests", {
+  body: { interest: { keyword: "React" } },
+  //                  ^? keyword は string 型を要求（型チェック）
+});
+
+// 存在しないパス → コンパイルエラー
+const { data } = await client.GET("/api/v1/nonexistent");
+//                                 ^^^^^^^^^^^^^^^^^^^^^^ TS Error!</code></pre>
+
+    <!-- ============================= -->
+    <h2 id="openapi-react-query">6. openapi-react-query: TanStack Queryフック自動生成 <span class="section-tag tag-react">React</span></h2>
+
+    <h3>インストール</h3>
+
+    <pre><code>npm install @openapi-ts/react-query @tanstack/react-query</code></pre>
+
+    <h3>セットアップ</h3>
+
+    <div class="file-label">frontend/src/lib/query-client.ts</div>
+    <pre><code>import createQueryClient from '@openapi-ts/react-query';
+import client from './client';
+
+const $api = createQueryClient(client);
+
+export default $api;</code></pre>
+
+    <div class="why-box">
+      <code>createQueryClient</code> に openapi-fetch のクライアントを渡すだけで、全エンドポイントに対応するTanStack Queryフックが使えるようになる。手動で <code>useQuery</code> / <code>useMutation</code> のラッパーフックを書く必要がない。
+    </div>
+
+    <h3>コンポーネントでの使用</h3>
+
+    <pre><code>import $api from '../lib/query-client';
+
+function InterestList() {
+  // 型安全な useQuery — パスを文字列で指定するだけ
+  const { data, isLoading, error } = $api.useQuery(
+    "get", "/api/v1/interests"
+  );
+  //     ^? data: { id: number; keyword: string; created_at: string }[] | undefined
+
+  if (isLoading) return &lt;Spinner /&gt;;
+  if (error) return &lt;ErrorMessage error={error} /&gt;;
+
+  return (
+    &lt;ul&gt;
+      {data?.map(interest =&gt; (
+        &lt;li key={interest.id}&gt;{interest.keyword}&lt;/li&gt;
+        //                     ^? string (型推論)
+      ))}
+    &lt;/ul&gt;
+  );
+}
+
+function CreateInterest() {
+  const queryClient = useQueryClient();
+
+  const mutation = $api.useMutation("post", "/api/v1/interests", {
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({
+        queryKey: ["get", "/api/v1/interests"],
+      });
+    },
+  });
+
+  const handleSubmit = (keyword: string) =&gt; {
+    mutation.mutate({
+      body: { interest: { keyword } },
+      //                  ^? 型チェックされる
+    });
+  };
+
+  return /* ... */;
+}</code></pre>
+
+    <h3>フィルタ付きクエリ</h3>
+
+    <pre><code>// クエリパラメータも型安全
+const { data } = $api.useQuery("get", "/api/v1/news", {
+  params: {
+    query: { date: "2024-06-15", tag: "React" },
+    //       ^? OpenAPIスキーマに定義されたパラメータのみ許可
+  },
+});
+
+// パスパラメータも型安全
+const { data } = $api.useQuery("get", "/api/v1/news/{id}", {
+  params: {
+    path: { id: 42 },
+    //      ^? number 型を要求
+  },
+});</code></pre>
+
+    <!-- ============================= -->
+    <h2 id="dev-workflow">7. 開発ワークフロー <span class="section-tag tag-both">共通</span></h2>
+
+    <h3>日常の開発フロー</h3>
+
+    <ol>
+      <li><strong>バックエンド開発者がAPIを追加/変更する</strong></li>
+      <li><strong>RSpec request spec を書く/更新する</strong>（APIの入出力を定義）</li>
+      <li><strong><code>OPENAPI=1 bundle exec rspec</code></strong> を実行（テスト + OpenAPIスキーマ生成）</li>
+      <li><strong><code>npm run generate:api</code></strong> をフロントエンドで実行（TypeScript型を更新）</li>
+      <li><strong>フロントエンドで自動的に型エラーが検出される</strong>（レスポンス形式が変わった場合）</li>
+    </ol>
+
+    <h3>一括実行スクリプト</h3>
+
+    <div class="file-label">News-Picker/Makefile</div>
+    <pre><code># OpenAPI仕様の生成から型生成まで一気に実行
+.PHONY: api-sync
+api-sync:
+	cd backend && OPENAPI=1 bundle exec rspec
+	cd frontend && npm run generate:api
+	@echo "✅ API types synced successfully"
+
+# バックエンドのテストだけ（OpenAPI生成なし）
+.PHONY: test-backend
+test-backend:
+	cd backend && bundle exec rspec
+
+# フロント型チェック
+.PHONY: typecheck
+typecheck:
+	cd frontend && npx tsc --noEmit</code></pre>
+
+    <pre><code># 使い方
+make api-sync   # API変更後に実行
+make typecheck  # 型が壊れていないか確認</code></pre>
+
+    <div class="tip-box">
+      CI/CDパイプラインでは、<code>api-sync</code> 後に <code>typecheck</code> を実行する。バックエンドの変更でフロントの型が壊れた場合、CIが検出してくれる。
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="comparison">8. 手動実装との比較</h2>
+
+    <h3>Before（手動で型・フックを定義）</h3>
+
+    <pre><code>// types/index.ts — 手動で定義
+interface Interest {
+  id: number;
+  keyword: string;
+  created_at: string;
+}
+
+// hooks/useInterests.ts — 手動で定義
+export const useInterests = () =&gt; {
+  return useQuery({
+    queryKey: ['interests'],
+    queryFn: () =&gt; api&lt;Interest[]&gt;('/interests'),
+  });
+};
+
+export const useCreateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyword: string) =&gt;
+      api&lt;Interest&gt;('/interests', {
+        method: 'POST',
+        body: JSON.stringify({ interest: { keyword } }),
+      }),
+    onSuccess: () =&gt; queryClient.invalidateQueries({ queryKey: ['interests'] }),
+  });
+};
+// ... update, delete も手動で定義</code></pre>
+
+    <h3>After（OpenAPIから自動生成）</h3>
+
+    <pre><code>// 型定義: 不要（api.d.ts が自動生成）
+// フックラッパー: 不要（$api.useQuery / $api.useMutation を直接使う）
+
+// コンポーネントでそのまま使うだけ:
+const { data } = $api.useQuery("get", "/api/v1/interests");
+//     ^? 型は自動推論される
+
+const mutation = $api.useMutation("post", "/api/v1/interests");
+mutation.mutate({ body: { interest: { keyword: "React" } } });</code></pre>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>手動</th>
+          <th>OpenAPIワークフロー</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>型定義</strong></td>
+          <td>手書き（バックエンドと二重管理）</td>
+          <td>自動生成（Single Source of Truth）</td>
+        </tr>
+        <tr>
+          <td><strong>useQuery / useMutation</strong></td>
+          <td>エンドポイントごとにフック関数を手書き</td>
+          <td>$api.useQuery("get", "/path") で直接呼び出し</td>
+        </tr>
+        <tr>
+          <td><strong>パス文字列の型安全性</strong></td>
+          <td>なし（タイポに気づかない）</td>
+          <td>あり（存在しないパスはコンパイルエラー）</td>
+        </tr>
+        <tr>
+          <td><strong>バックエンド変更時</strong></td>
+          <td>手動で型・フックを修正（忘れがち）</td>
+          <td>型再生成 → TSコンパイラが差分を検出</td>
+        </tr>
+        <tr>
+          <td><strong>APIドキュメント</strong></td>
+          <td>別途作成・管理が必要</td>
+          <td>テスト実行で自動生成</td>
+        </tr>
+        <tr>
+          <td><strong>初期構築コスト</strong></td>
+          <td>低い</td>
+          <td>やや高い（パイプライン構築）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      <strong>初期コストは高いが、エンドポイントが増えるほど効果が出る。</strong> 5個のエンドポイントでも十分に元が取れる。10個以上になると手動管理は現実的でなくなる。「RSpecを書く = API仕様が完成 = フロントの型が使える」の一気通貫フローは、開発速度とバグ防止の両面で強力。
+    </div>
+
+    <div class="nav-footer">
+      <a href="step1-project-setup.html">← Step 1 で導入開始</a>
+      <a href="index.html">ガイド一覧に戻る →</a>
+    </div>
+  </div>
+</body>
+</html>

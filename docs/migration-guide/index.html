@@ -217,6 +217,7 @@
         <span class="tech-badge rails">Rails 7 API</span>
         <span class="tech-badge rails">Devise + JWT</span>
         <span class="tech-badge rails">Sidekiq</span>
+        <span class="tech-badge react">OpenAPI</span>
         <span class="tech-badge aws">AWS CDK</span>
       </div>
     </header>
@@ -228,6 +229,7 @@
         <li>Rails: 中級者向け - Devise認証, Sidekiq, Service層を丁寧に。「なぜ必要か」を常に解説</li>
         <li>AWS: 中級者向け - CDKによるECS/RDS/CloudFront構成をステップバイステップで</li>
         <li>各Stepは独立して読める構成。上から順に進めることを推奨</li>
+        <li>OpenAPIによる型安全なAPI連携パイプライン（rspec-openapi → openapi-typescript → openapi-react-query）</li>
         <li>コード解説は差分ベース（追加・変更箇所を中心に掲載）</li>
       </ul>
     </div>
@@ -285,6 +287,24 @@
           <span class="tag">Denylist / JTIMatcher / Allowlist</span>
           <span class="tag">devise_token_auth比較</span>
           <span class="depth-indicator depth-detailed">初心者向け解説</span>
+        </div>
+      </a>
+
+      <!-- OpenAPI Workflow -->
+      <a href="openapi-workflow.html" class="step-card">
+        <div class="step-header">
+          <div class="step-number both" style="background: rgba(249, 115, 22, 0.15); color: #f97316;">📖</div>
+          <div class="step-title">OpenAPI ワークフロー解説（読み物）</div>
+        </div>
+        <div class="step-desc">
+          RSpecからAPI仕様を自動生成し、フロントエンドの型・TanStack Queryフックを自動生成するパイプライン。rspec-openapi → openapi-typescript → openapi-fetch → openapi-react-queryの全体像。
+        </div>
+        <div class="step-tags">
+          <span class="tag">rspec-openapi</span>
+          <span class="tag">openapi-typescript</span>
+          <span class="tag">openapi-fetch</span>
+          <span class="tag">openapi-react-query</span>
+          <span class="depth-indicator depth-detailed">フルパイプライン解説</span>
         </div>
       </a>
 
