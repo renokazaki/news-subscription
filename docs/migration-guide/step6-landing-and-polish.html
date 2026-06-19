@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 6: ランディングページ & 仕上げ | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .step-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .goal-box { background: var(--surface); border-left: 4px solid var(--green); padding: 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin-bottom: 2rem; }
+    .goal-box h3 { margin-top: 0; color: var(--green); }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
+    .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    th, td { padding: 0.75rem; text-align: left; border: 1px solid var(--border); }
+    th { background: var(--surface); color: var(--accent); }
+    td { background: var(--code-bg); }
+    .arrow { color: var(--green); font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>Step 6: ランディングページ & 仕上げ</h1>
+    <p class="step-meta">所要時間: 1日 | Next.js固有コードの置換パターン集 + エラーハンドリング</p>
+
+    <div class="goal-box">
+      <h3>このStepのゴール</h3>
+      <p>Next.js固有のAPIを全てReact標準に置き換え、ランディングページを移植し、エラーハンドリングとレスポンシブ対応を完了させる。</p>
+    </div>
+
+    <h2>6-1. 置換パターン一覧 <span class="section-tag tag-react">React</span></h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Next.js</th>
+          <th></th>
+          <th>React + Vite</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>"use client"</code></td>
+          <td class="arrow">→</td>
+          <td>削除（全てクライアントコンポーネント）</td>
+        </tr>
+        <tr>
+          <td><code>import Image from 'next/image'</code></td>
+          <td class="arrow">→</td>
+          <td><code>&lt;img&gt;</code> タグ</td>
+        </tr>
+        <tr>
+          <td><code>import Link from 'next/link'</code></td>
+          <td class="arrow">→</td>
+          <td><code>import { Link } from 'react-router'</code></td>
+        </tr>
+        <tr>
+          <td><code>useRouter()</code> from next/navigation</td>
+          <td class="arrow">→</td>
+          <td><code>useNavigate()</code> from react-router</td>
+        </tr>
+        <tr>
+          <td><code>useSearchParams()</code> from next/navigation</td>
+          <td class="arrow">→</td>
+          <td><code>useSearchParams()</code> from react-router</td>
+        </tr>
+        <tr>
+          <td><code>usePathname()</code></td>
+          <td class="arrow">→</td>
+          <td><code>useLocation().pathname</code></td>
+        </tr>
+        <tr>
+          <td><code>router.push('/path')</code></td>
+          <td class="arrow">→</td>
+          <td><code>navigate('/path')</code></td>
+        </tr>
+        <tr>
+          <td><code>redirect('/path')</code> (Server)</td>
+          <td class="arrow">→</td>
+          <td><code>navigate('/path', { replace: true })</code></td>
+        </tr>
+        <tr>
+          <td>Server Actions (<code>"use server"</code>)</td>
+          <td class="arrow">→</td>
+          <td>TanStack Query <code>useMutation</code></td>
+        </tr>
+        <tr>
+          <td><code>revalidatePath()</code></td>
+          <td class="arrow">→</td>
+          <td><code>queryClient.invalidateQueries()</code></td>
+        </tr>
+        <tr>
+          <td>async Server Components</td>
+          <td class="arrow">→</td>
+          <td><code>useQuery</code> + Suspense/Loading状態</td>
+        </tr>
+        <tr>
+          <td><code>useAuth()</code> from @clerk/nextjs</td>
+          <td class="arrow">→</td>
+          <td><code>useCurrentUser()</code> (自作フック)</td>
+        </tr>
+        <tr>
+          <td><code>&lt;UserButton /&gt;</code> (Clerk)</td>
+          <td class="arrow">→</td>
+          <td>自作 <code>&lt;UserMenu /&gt;</code></td>
+        </tr>
+        <tr>
+          <td><code>metadata</code> export (SEO)</td>
+          <td class="arrow">→</td>
+          <td>不要（SPAではサーバーレンダリングしない）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>6-2. next/image → img 置換 <span class="section-tag tag-react">React</span></h2>
+
+    <h3>Before</h3>
+    <pre><code>import Image from 'next/image'
+
+&lt;Image
+  src="/hero.png"
+  alt="Hero"
+  width={600}
+  height={400}
+  priority
+/&gt;</code></pre>
+
+    <h3>After</h3>
+    <pre><code>&lt;img
+  src="/hero.png"
+  alt="Hero"
+  width={600}
+  height={400}
+  loading="eager"  // priority相当
+  className="w-full h-auto"
+/&gt;</code></pre>
+
+    <div class="why-box">
+      <code>next/image</code> が提供していた最適化（WebP変換、レスポンシブ srcset、遅延読み込み）はVite SPAでは使えない。<code>loading="lazy"</code> でブラウザネイティブの遅延読み込みは利用可能。画像最適化が必要なら、ビルド時に <code>vite-plugin-image-optimizer</code> を使うか、CDN側（CloudFront）で画像変換する。
+    </div>
+
+    <h2>6-3. next/link → React Router Link <span class="section-tag tag-react">React</span></h2>
+
+    <h3>Before</h3>
+    <pre><code>import Link from 'next/link'
+
+&lt;Link href="/dashboard"&gt;
+  ダッシュボード
+&lt;/Link&gt;</code></pre>
+
+    <h3>After</h3>
+    <pre><code>import { Link } from 'react-router'
+
+&lt;Link to="/dashboard"&gt;
+  ダッシュボード
+&lt;/Link&gt;</code></pre>
+
+    <p>主な違い: <code>href</code> → <code>to</code> に変更するだけ。</p>
+
+    <h2>6-4. ルーティング（useRouter → useNavigate） <span class="section-tag tag-react">React</span></h2>
+
+    <h3>Before</h3>
+    <pre><code>import { useRouter } from 'next/navigation'
+
+const router = useRouter()
+router.push('/dashboard')
+router.replace('/sign-in')
+router.back()</code></pre>
+
+    <h3>After</h3>
+    <pre><code>import { useNavigate } from 'react-router'
+
+const navigate = useNavigate()
+navigate('/dashboard')
+navigate('/sign-in', { replace: true })
+navigate(-1)  // back</code></pre>
+
+    <h2>6-5. エラーバウンダリ <span class="section-tag tag-react">React</span></h2>
+
+    <p>Next.js の <code>error.tsx</code> に相当する機能を React Router の <code>errorElement</code> で実現:</p>
+
+    <pre><code>// ルート定義
+{
+  path: '/dashboard',
+  element: &lt;DashboardPage /&gt;,
+  errorElement: &lt;ErrorPage /&gt;,  // このルート以下でのエラーをキャッチ
+}
+
+// ErrorPage.tsx
+import { useRouteError, isRouteErrorResponse } from 'react-router'
+
+function ErrorPage() {
+  const error = useRouteError()
+
+  if (isRouteErrorResponse(error)) {
+    return &lt;div&gt;{error.status}: {error.statusText}&lt;/div&gt;
+  }
+
+  return &lt;div&gt;予期しないエラーが発生しました&lt;/div&gt;
+}</code></pre>
+
+    <h2>6-6. TanStack Query のグローバルエラーハンドリング <span class="section-tag tag-react">React</span></h2>
+
+    <pre><code>// main.tsx
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) =&gt; {
+        // 401/403はリトライしない
+        if (error.message.includes('401') || error.message.includes('403')) {
+          return false;
+        }
+        return failureCount &lt; 3;
+      },
+      staleTime: 1000 * 60,  // 1分間はキャッシュを新鮮とみなす
+    },
+    mutations: {
+      onError: (error) =&gt; {
+        toast.error(error.message);  // sonner で通知
+      },
+    },
+  },
+});</code></pre>
+
+    <div class="why-box">
+      <code>staleTime: 60000</code> — デフォルトではコンポーネントがマウントされるたびにAPIを再呼び出しする。1分間はキャッシュを使うことで、ページ遷移→戻る時の不要なリクエストを削減する。UXとしてもデータが即座に表示されて快適。
+    </div>
+
+    <h2>6-7. レスポンシブ対応の確認ポイント</h2>
+
+    <ul>
+      <li><strong>Sidebar</strong>: モバイルではデフォルト非表示、ハンバーガーメニューで開閉</li>
+      <li><strong>NewsCard</strong>: グリッド表示 → モバイルでは1カラム</li>
+      <li><strong>ランディングページ</strong>: ヒーローセクションの画像サイズ調整</li>
+    </ul>
+
+    <pre><code>// Tailwindのレスポンシブ例
+&lt;div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"&gt;
+  {news.map(item =&gt; &lt;NewsCard key={item.id} {...item} /&gt;)}
+&lt;/div&gt;
+
+// サイドバーの開閉（モバイル）
+&lt;aside className={cn(
+  "fixed inset-y-0 left-0 z-40 w-64 bg-background border-r transition-transform",
+  "md:static md:translate-x-0",  // デスクトップでは常に表示
+  isOpen ? "translate-x-0" : "-translate-x-full"  // モバイルでは開閉
+)}&gt;</code></pre>
+
+    <h2>6-8. 動作確認チェックリスト</h2>
+    <ol>
+      <li>ランディングページが正しく表示される（画像・リンク・レイアウト）</li>
+      <li><code>next/image</code> や <code>next/link</code> のimportエラーが出ない</li>
+      <li>全ページのルーティングが正しく動作する</li>
+      <li>認証フローが一通り動く（サインアップ→ログイン→ダッシュボード→ログアウト）</li>
+      <li>API エラー時にtoast通知が表示される</li>
+      <li>モバイル表示でサイドバーが正しく開閉する</li>
+      <li><code>npm run build</code> がエラーなく完了する</li>
+    </ol>
+
+    <div class="nav-footer">
+      <a href="step5-background-jobs.html">← Step 5: バックグラウンドジョブ</a>
+      <a href="step7-aws-cdk.html">Step 7: AWSインフラ（CDK） →</a>
+    </div>
+  </div>
+</body>
+</html>
