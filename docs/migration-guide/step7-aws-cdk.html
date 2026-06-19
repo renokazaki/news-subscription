@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 7: AWSインフラ（CDK） | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --aws-orange: #ff9900; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .step-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .goal-box { background: var(--surface); border-left: 4px solid var(--green); padding: 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin-bottom: 2rem; }
+    .goal-box h3 { margin-top: 0; color: var(--green); }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .tip-box::before { content: "📝 Tips"; display: block; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .cost-box { background: rgba(255, 153, 0, 0.05); border-left: 4px solid var(--aws-orange); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .cost-box::before { content: "💰 コスト目安"; display: block; font-weight: 700; color: var(--aws-orange); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
+    .tag-aws { background: rgba(255, 153, 0, 0.1); color: var(--aws-orange); border: 1px solid rgba(255, 153, 0, 0.2); }
+    .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
+    .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; white-space: pre; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>Step 7: AWSインフラ（CDK）</h1>
+    <p class="step-meta">所要時間: 1〜2日 | CDK TypeScriptで検証環境を構築・破棄可能に</p>
+
+    <div class="goal-box">
+      <h3>このStepのゴール</h3>
+      <p><code>cdk deploy</code> 一発でVPC・RDS・ElastiCache・ECS Fargate・ALB・S3・CloudFrontが構築され、アプリが動作する。<code>cdk destroy</code> で全リソースをクリーンに削除できる。</p>
+    </div>
+
+    <h2>全体アーキテクチャ</h2>
+
+    <div class="flow-diagram">
+┌─ Internet ──────────────────────────────────────────────────────────────┐
+│                                                                         │
+│  ┌──────────────────┐              ┌──────────────────┐                 │
+│  │ CloudFront       │              │ ALB              │                 │
+│  │ (React SPA配信)  │              │ (APIルーティング) │                 │
+│  └────────┬─────────┘              └────────┬─────────┘                 │
+│           │                                 │                           │
+└───────────┼─────────────────────────────────┼───────────────────────────┘
+            │                                 │
+┌── Public Subnet ────────────────────────────┼───────────────────────────┐
+│   ┌───────▼────────┐                        │                           │
+│   │ S3 Bucket      │              ┌─────────▼──────────┐               │
+│   │ (静的ファイル)  │              │ NAT Gateway        │               │
+│   └────────────────┘              └─────────┬──────────┘               │
+└─────────────────────────────────────────────┼───────────────────────────┘
+                                              │
+┌── Private Subnet ───────────────────────────┼───────────────────────────┐
+│                                             │                           │
+│   ┌─────────────────────┐    ┌──────────────▼──────────┐               │
+│   │ ECS Fargate         │    │ ECS Fargate             │               │
+│   │ (Rails API - Web)   │    │ (Sidekiq Worker)        │               │
+│   └──────────┬──────────┘    └──────────────┬──────────┘               │
+│              │                              │                           │
+│              ▼                              ▼                           │
+│   ┌────────────────────┐    ┌─────────────────────────┐                │
+│   │ RDS PostgreSQL     │    │ ElastiCache Redis       │                │
+│   │ (db.t3.micro)      │    │ (cache.t3.micro)        │                │
+│   └────────────────────┘    └─────────────────────────┘                │
+└─────────────────────────────────────────────────────────────────────────┘</div>
+
+    <div class="cost-box">
+      この構成の検証用コスト（東京リージョン、概算）:<br>
+      RDS db.t3.micro: ~$15/月, ElastiCache cache.t3.micro: ~$12/月, ECS Fargate: ~$30/月（0.25vCPU x 2タスク）, NAT Gateway: ~$33/月, ALB: ~$16/月<br>
+      <strong>合計: 約$100-120/月</strong>。検証後は <code>cdk destroy</code> で即座に0円にできる。
+    </div>
+
+    <h2>7-1. 前提条件 <span class="section-tag tag-aws">AWS</span></h2>
+
+    <ul>
+      <li>AWS CLIがインストール済み、<code>aws configure</code> でクレデンシャル設定済み</li>
+      <li>Node.js 18+ がインストール済み</li>
+      <li>Docker Desktop が起動している（ECSイメージビルドに必要）</li>
+    </ul>
+
+    <pre><code># CDK CLI のインストール
+npm install -g aws-cdk
+
+# CDK バージョン確認
+cdk --version
+
+# AWSアカウントでCDKを初めて使う場合、ブートストラップが必要
+cdk bootstrap aws://ACCOUNT_ID/ap-northeast-1</code></pre>
+
+    <div class="why-box">
+      <strong><code>cdk bootstrap</code> とは:</strong> CDKがデプロイに使う「踏み台」リソース（S3バケット、IAMロール）をAWSアカウントに作成する一度きりの初期化処理。CDKはデプロイ時にCloudFormationテンプレートとアセット（Dockerイメージ等）をこのS3バケットにアップロードし、CloudFormationがそこから読み出してリソースを作成する。
+    </div>
+
+    <h2>7-2. CDKプロジェクト初期化 <span class="section-tag tag-aws">AWS</span></h2>
+
+    <pre><code>cd News-Picker/
+mkdir infra && cd infra
+cdk init app --language typescript</code></pre>
+
+    <h3>依存パッケージ追加</h3>
+
+    <pre><code>npm install aws-cdk-lib constructs</code></pre>
+
+    <p>CDK v2では <code>aws-cdk-lib</code> に全サービスのConstructが含まれているため、個別の <code>@aws-cdk/aws-*</code> パッケージは不要。</p>
+
+    <div class="file-label">infra/bin/infra.ts</div>
+    <pre><code>#!/usr/bin/env node
+import 'source-map-support/register';
+import * as cdk from 'aws-cdk-lib';
+import { VpcStack } from '../lib/vpc-stack';
+import { DatabaseStack } from '../lib/database-stack';
+import { BackendStack } from '../lib/backend-stack';
+import { FrontendStack } from '../lib/frontend-stack';
+
+const app = new cdk.App();
+
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: process.env.CDK_DEFAULT_REGION || 'ap-northeast-1',
+};
+
+// スタック間の依存関係を明示的に定義
+const vpc = new VpcStack(app, 'NewsPicker-Vpc', { env });
+const database = new DatabaseStack(app, 'NewsPicker-Database', {
+  env,
+  vpc: vpc.vpc,
+});
+const backend = new BackendStack(app, 'NewsPicker-Backend', {
+  env,
+  vpc: vpc.vpc,
+  database: database.dbInstance,
+  redis: database.redisCluster,
+});
+new FrontendStack(app, 'NewsPicker-Frontend', {
+  env,
+  apiLoadBalancer: backend.loadBalancer,
+});</code></pre>
+
+    <div class="why-box">
+      <strong>スタックを分割する理由:</strong> 全リソースを1つのスタックに入れることもできるが、分割することで:
+      <ul style="margin-top:0.5rem">
+        <li>変更時の影響範囲が限定される（フロントエンドの変更でDBスタックが更新されない）</li>
+        <li>デプロイの並列化が可能（依存のないスタックは同時にデプロイできる）</li>
+        <li>個別に <code>cdk deploy NewsPicker-Frontend</code> のように部分デプロイできる</li>
+      </ul>
+    </div>
+
+    <h2>7-3. VPCスタック <span class="section-tag tag-aws">AWS</span></h2>
+
+    <div class="file-label">infra/lib/vpc-stack.ts</div>
+    <pre><code>import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { Construct } from 'constructs';
+
+export class VpcStack extends cdk.Stack {
+  public readonly vpc: ec2.Vpc;
+
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    this.vpc = new ec2.Vpc(this, 'Vpc', {
+      maxAzs: 2,
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
+  }
+}</code></pre>
+
+    <div class="why-box">
+      <strong><code>maxAzs: 2</code></strong> — 2つのAvailability Zone（物理的に離れたデータセンター群）にリソースを分散する。1つのAZが障害を起こしても、もう1つで継続稼働できる。検証用途では2で十分（本番は3推奨）。
+    </div>
+
+    <div class="why-box">
+      <strong><code>natGateways: 1</code></strong> — NATゲートウェイはプライベートサブネットからインターネットへの外向き通信を可能にする。ECS Fargate（プライベートサブネット配置）がDockerイメージのプルやTavily API呼び出しをするために必要。<br><br>
+      デフォルトではAZごとに1つ（計2つ）作成されるが、検証用途では1つに削減してコストを抑える（NAT Gatewayは ~$33/月/個）。
+    </div>
+
+    <div class="why-box">
+      <strong>なぜプライベートサブネットにアプリを置くか:</strong> パブリックサブネットに配置するとインターネットから直接アクセスできてしまう。プライベートサブネットに置き、ALB（パブリック）経由でのみアクセスさせることで、攻撃面を最小化する。
+    </div>
+
+    <h2>7-4. データベーススタック <span class="section-tag tag-aws">AWS</span></h2>
+
+    <div class="file-label">infra/lib/database-stack.ts</div>
+    <pre><code>import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import { Construct } from 'constructs';
+
+interface DatabaseStackProps extends cdk.StackProps {
+  vpc: ec2.Vpc;
+}
+
+export class DatabaseStack extends cdk.Stack {
+  public readonly dbInstance: rds.DatabaseInstance;
+  public readonly redisCluster: elasticache.CfnCacheCluster;
+  public readonly dbSecurityGroup: ec2.SecurityGroup;
+  public readonly redisSecurityGroup: ec2.SecurityGroup;
+
+  constructor(scope: Construct, id: string, props: DatabaseStackProps) {
+    super(scope, id, props);
+
+    const { vpc } = props;
+
+    // ===== RDS PostgreSQL =====
+    this.dbSecurityGroup = new ec2.SecurityGroup(this, 'DbSg', {
+      vpc,
+      description: 'Security group for RDS PostgreSQL',
+      allowAllOutbound: false,
+    });
+
+    this.dbInstance = new rds.DatabaseInstance(this, 'Database', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_15,
+      }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO,
+      ),
+      vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [this.dbSecurityGroup],
+      databaseName: 'news_picker_production',
+      credentials: rds.Credentials.fromGeneratedSecret('postgres'),
+      multiAz: false,         // 検証用: シングルAZ
+      allocatedStorage: 20,   // 20GB
+      maxAllocatedStorage: 50,
+      backupRetention: cdk.Duration.days(1),
+      deleteProtection: false, // cdk destroy で削除可能にする
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // ===== ElastiCache Redis =====
+    this.redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSg', {
+      vpc,
+      description: 'Security group for ElastiCache Redis',
+      allowAllOutbound: false,
+    });
+
+    const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
+      description: 'Subnet group for Redis',
+      subnetIds: vpc.selectSubnets({
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      }).subnetIds,
+    });
+
+    this.redisCluster = new elasticache.CfnCacheCluster(this, 'Redis', {
+      engine: 'redis',
+      cacheNodeType: 'cache.t3.micro',
+      numCacheNodes: 1,
+      vpcSecurityGroupIds: [this.redisSecurityGroup.securityGroupId],
+      cacheSubnetGroupName: redisSubnetGroup.ref,
+    });
+  }
+}</code></pre>
+
+    <div class="why-box">
+      <strong><code>credentials: rds.Credentials.fromGeneratedSecret('postgres')</code></strong> — CDKがランダムなパスワードを生成し、AWS Secrets Managerに自動保存する。コードやenv変数にパスワードをハードコードする必要がない。ECSタスクからはSecrets Managerを参照してDB接続する。
+    </div>
+
+    <div class="why-box">
+      <strong><code>removalPolicy: cdk.RemovalPolicy.DESTROY</code></strong> — デフォルトでは <code>cdk destroy</code> してもRDSは「保護のため」削除されない（スナップショットが残る）。検証用途では完全削除したいのでDESTROYを指定。<strong>本番環境では絶対にこの設定を使わないこと。</strong>
+    </div>
+
+    <div class="why-box">
+      <strong>SecurityGroupを分ける理由:</strong> DB用とRedis用のセキュリティグループを別にすることで、「ECS → DB」は5432番ポートのみ許可、「ECS → Redis」は6379番ポートのみ許可と、最小権限の原則を適用できる。
+    </div>
+
+    <h2>7-5. バックエンドスタック（ECS Fargate + ALB） <span class="section-tag tag-aws">AWS</span></h2>
+
+    <div class="file-label">infra/lib/backend-stack.ts</div>
+    <pre><code>import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import { Construct } from 'constructs';
+
+interface BackendStackProps extends cdk.StackProps {
+  vpc: ec2.Vpc;
+  database: rds.DatabaseInstance;
+  redis: elasticache.CfnCacheCluster;
+}
+
+export class BackendStack extends cdk.Stack {
+  public readonly loadBalancer: cdk.aws_elasticloadbalancingv2.ApplicationLoadBalancer;
+
+  constructor(scope: Construct, id: string, props: BackendStackProps) {
+    super(scope, id, props);
+
+    const { vpc, database, redis } = props;
+
+    // ECS Cluster
+    const cluster = new ecs.Cluster(this, 'Cluster', { vpc });
+
+    // タスク定義（Rails API Web）
+    const webTaskDef = new ecs.FargateTaskDefinition(this, 'WebTaskDef', {
+      memoryLimitMiB: 512,
+      cpu: 256,
+    });
+
+    const webContainer = webTaskDef.addContainer('rails', {
+      image: ecs.ContainerImage.fromAsset('../backend'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'rails-web',
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }),
+      environment: {
+        RAILS_ENV: 'production',
+        RAILS_LOG_TO_STDOUT: 'true',
+        REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}/0`,
+      },
+      secrets: {
+        DATABASE_URL: ecs.Secret.fromSecretsManager(
+          database.secret!, 'host'
+        ),
+      },
+      command: ['bundle', 'exec', 'rails', 'server', '-b', '0.0.0.0', '-p', '3000'],
+    });
+
+    webContainer.addPortMappings({ containerPort: 3000 });
+
+    // ALB + Fargate Service（Web）
+    const webService = new ecs_patterns.ApplicationLoadBalancedFargateService(
+      this, 'WebService', {
+        cluster,
+        taskDefinition: webTaskDef,
+        desiredCount: 1,
+        publicLoadBalancer: true,
+        assignPublicIp: false,
+      }
+    );
+
+    this.loadBalancer = webService.loadBalancer;
+
+    // ヘルスチェック設定
+    webService.targetGroup.configureHealthCheck({
+      path: '/api/v1/health',
+      healthyHttpCodes: '200',
+    });
+
+    // タスク定義（Sidekiq Worker）
+    const workerTaskDef = new ecs.FargateTaskDefinition(this, 'WorkerTaskDef', {
+      memoryLimitMiB: 512,
+      cpu: 256,
+    });
+
+    workerTaskDef.addContainer('sidekiq', {
+      image: ecs.ContainerImage.fromAsset('../backend'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'sidekiq',
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }),
+      environment: {
+        RAILS_ENV: 'production',
+        REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}/0`,
+      },
+      secrets: {
+        DATABASE_URL: ecs.Secret.fromSecretsManager(
+          database.secret!, 'host'
+        ),
+      },
+      command: ['bundle', 'exec', 'sidekiq'],
+    });
+
+    const workerService = new ecs.FargateService(this, 'WorkerService', {
+      cluster,
+      taskDefinition: workerTaskDef,
+      desiredCount: 1,
+      assignPublicIp: false,
+    });
+
+    // セキュリティグループ: ECS → RDS 許可
+    database.connections.allowFrom(
+      webService.service,
+      ec2.Port.tcp(5432),
+      'Allow ECS Web to RDS'
+    );
+    database.connections.allowFrom(
+      workerService,
+      ec2.Port.tcp(5432),
+      'Allow ECS Worker to RDS'
+    );
+  }
+}</code></pre>
+
+    <div class="why-box">
+      <strong><code>ecs.ContainerImage.fromAsset('../backend')</code></strong> — CDKが <code>backend/</code> ディレクトリのDockerfileを自動でビルドし、ECR（コンテナレジストリ）にプッシュしてくれる。手動でDockerイメージをビルド・プッシュする必要がない。
+    </div>
+
+    <div class="why-box">
+      <strong>WebとWorkerを分ける理由:</strong> Rails API（HTTP受付）とSidekiq（バックグラウンドジョブ）は異なるプロセスだが、同じコードベース（Dockerイメージ）を使う。<code>command</code> を変えるだけで同一イメージから異なるプロセスを起動する。<br><br>
+      分離のメリット:
+      <ul style="margin-top:0.5rem">
+        <li>WebとWorkerを独立にスケールできる（APIアクセスが増えたらWebだけ増やす）</li>
+        <li>WorkerがメモリリークしてもAPIに影響しない</li>
+        <li>デプロイ時にWorkerを先に止めてAPIは継続稼働、などの制御が可能</li>
+      </ul>
+    </div>
+
+    <div class="why-box">
+      <strong><code>ApplicationLoadBalancedFargateService</code></strong> — CDKの高レベルConstruct（L3）。ALB・TargetGroup・Listener・SecurityGroup・FargateServiceを1行で作成してくれる。個別に作ると20行以上のコードが必要になるものをパッケージ化している。
+    </div>
+
+    <h2>7-6. フロントエンドスタック（S3 + CloudFront） <span class="section-tag tag-aws">AWS</span></h2>
+
+    <div class="file-label">infra/lib/frontend-stack.ts</div>
+    <pre><code>import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import { Construct } from 'constructs';
+
+interface FrontendStackProps extends cdk.StackProps {
+  apiLoadBalancer: elbv2.ApplicationLoadBalancer;
+}
+
+export class FrontendStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: FrontendStackProps) {
+    super(scope, id, props);
+
+    const { apiLoadBalancer } = props;
+
+    // S3バケット（React SPAの静的ファイル）
+    const siteBucket = new s3.Bucket(this, 'SiteBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // CloudFront Distribution
+    const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      additionalBehaviors: {
+        '/api/*': {
+          origin: new origins.LoadBalancerV2Origin(apiLoadBalancer, {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+          }),
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        },
+      },
+      defaultRootObject: 'index.html',
+      errorResponses: [
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
+        },
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
+        },
+      ],
+    });
+
+    // ReactビルドをS3にデプロイ
+    new s3deploy.BucketDeployment(this, 'DeploySite', {
+      sources: [s3deploy.Source.asset('../frontend/dist')],
+      destinationBucket: siteBucket,
+      distribution,
+      distributionPaths: ['/*'],
+    });
+
+    // 出力: CloudFrontのURL
+    new cdk.CfnOutput(this, 'DistributionUrl', {
+      value: `https://${distribution.distributionDomainName}`,
+      description: 'CloudFront URL',
+    });
+  }
+}</code></pre>
+
+    <div class="why-box">
+      <strong><code>blockPublicAccess: BLOCK_ALL</code></strong> — S3バケットを直接公開しない。CloudFrontのOAC（Origin Access Control）経由でのみアクセスを許可する。S3バケットのURLが漏洩しても直接アクセスできないので安全。
+    </div>
+
+    <div class="why-box">
+      <strong><code>errorResponses</code> で404/403を index.html にリダイレクト:</strong> SPAは全てのルーティングをクライアント側（React Router）で処理する。<code>/dashboard</code> などのURLに直アクセスした場合、S3には <code>dashboard</code> というファイルがないため404になる。この設定で <code>index.html</code> を返し、React Routerがルーティングを処理する。
+    </div>
+
+    <div class="why-box">
+      <strong><code>/api/*</code> をALBにプロキシする設計:</strong> フロントエンドとAPIを同じドメイン（CloudFrontのドメイン）で提供することで:
+      <ul style="margin-top:0.5rem">
+        <li>CORSの問題が解消される（同一オリジンになるため）</li>
+        <li>本番環境のフロントエンドからは <code>/api/v1/...</code> に直接fetchするだけで済む</li>
+        <li>APIキャッシュは無効化（<code>CACHING_DISABLED</code>）し、毎回オリジンに到達させる</li>
+      </ul>
+    </div>
+
+    <h2>7-7. Dockerfile <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/Dockerfile</div>
+    <pre><code>FROM ruby:3.3-slim AS base
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+FROM base AS build
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Gemfile Gemfile.lock ./
+RUN bundle config set --local deployment true && \
+    bundle config set --local without 'development test' && \
+    bundle install
+
+COPY . .
+
+RUN bundle exec rails assets:precompile 2>/dev/null || true
+
+FROM base
+
+COPY --from=build /app /app
+COPY --from=build /usr/local/bundle /usr/local/bundle
+
+EXPOSE 3000
+
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]</code></pre>
+
+    <div class="why-box">
+      <strong>マルチステージビルド</strong>を使う理由: ビルドに必要なツール（build-essential: gcc等）は最終イメージには不要。ビルドステージでgemをコンパイルし、最終ステージにはコンパイル済みgemだけをコピーする。これによりイメージサイズが数百MB削減され、デプロイが高速化する。
+    </div>
+
+    <h2>7-8. デプロイ手順 <span class="section-tag tag-aws">AWS</span></h2>
+
+    <pre><code># 1. フロントエンドをビルド
+cd frontend
+npm run build   # dist/ に出力される
+
+# 2. CDKデプロイ（全スタック）
+cd ../infra
+cdk deploy --all --require-approval never
+
+# デプロイ完了後、出力されるURLを確認:
+# ✅ NewsPicker-Frontend
+#   DistributionUrl = https://d1234abcdef.cloudfront.net</code></pre>
+
+    <div class="warn-box">
+      <code>--require-approval never</code> はIAM変更やセキュリティグループ変更も確認なしで適用する。検証用途では便利だが、本番では省略して変更内容を確認すること。
+    </div>
+
+    <h3>デプロイ後の確認</h3>
+    <pre><code># ヘルスチェック
+curl https://d1234abcdef.cloudfront.net/api/v1/health
+# => {"status":"ok","timestamp":"..."}
+
+# フロントエンド
+open https://d1234abcdef.cloudfront.net
+# => React SPAが表示される</code></pre>
+
+    <h3>DBマイグレーション（初回）</h3>
+    <pre><code># ECS Exec でコンテナに入り、マイグレーション実行
+aws ecs execute-command \
+  --cluster NewsPicker-Cluster \
+  --task TASK_ARN \
+  --container rails \
+  --interactive \
+  --command "/bin/bash"
+
+# コンテナ内で:
+bundle exec rails db:migrate
+bundle exec rails db:seed</code></pre>
+
+    <div class="tip-box">
+      本番では毎回手動でマイグレーションを実行するのは面倒。タスク定義のentrypointスクリプトに <code>bundle exec rails db:migrate</code> を含めるか、デプロイパイプライン（GitHub Actions等）にマイグレーションステップを追加するのが一般的。
+    </div>
+
+    <h2>7-9. クリーンアップ <span class="section-tag tag-aws">AWS</span></h2>
+
+    <pre><code># 全リソースを削除
+cdk destroy --all
+
+# 確認: 全スタックが削除されたか
+aws cloudformation list-stacks --query "StackSummaries[?starts_with(StackName, 'NewsPicker')]"</code></pre>
+
+    <div class="why-box">
+      <code>removalPolicy: DESTROY</code> と <code>autoDeleteObjects: true</code> を設定しておいたので、S3バケット内のファイルも含めて完全削除される。設定を忘れるとS3バケットが「中身があるので削除できない」とエラーになり、手動削除が必要になる。
+    </div>
+
+    <h2>7-10. 動作確認チェックリスト</h2>
+    <ol>
+      <li><code>cdk synth</code> でCloudFormationテンプレートがエラーなく生成される</li>
+      <li><code>cdk deploy --all</code> が正常完了する</li>
+      <li>CloudFront URL でReact SPAが表示される</li>
+      <li><code>/api/v1/health</code> がCloudFront経由で200を返す</li>
+      <li>サインアップ・ログインが動作する</li>
+      <li>Interest作成 → Sidekiqでジョブ実行 → ニュースが表示される</li>
+      <li><code>cdk destroy --all</code> で全リソースが削除される</li>
+      <li>AWSコンソールでリソースが残っていないことを確認</li>
+    </ol>
+
+    <div class="nav-footer">
+      <a href="step6-landing-and-polish.html">← Step 6: ランディングページ & 仕上げ</a>
+      <a href="index.html">ガイド一覧に戻る →</a>
+    </div>
+  </div>
+</body>
+</html>
