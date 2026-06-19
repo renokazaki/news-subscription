@@ -18,7 +18,8 @@ News Pickerは、ユーザーが登録したキーワード(Interest)に基づ�
 | バックグラウンド処理 | n8n外部ワークフロー | Sidekiq + Redis |
 | ニュースAPI | Tavily (n8n経由) | Tavily (Rails直接) |
 | AI処理 | Google AI (n8n経由) | Google AI (Rails直接) |
-| HTTPクライアント(FE) | N/A (Server Components) | fetch API |
+| HTTPクライアント(FE) | N/A (Server Components) | openapi-fetch + openapi-react-query |
+| API仕様書 | なし | OpenAPI (rspec-openapi で自動生成) |
 | デプロイ | N/A | AWS (ECS + S3/CloudFront) |
 | リポジトリ | 単一Next.jsプロジェクト | モノレポ (frontend/ + backend/) |
 
@@ -44,10 +45,10 @@ News-Picker/
 │   │   │   ├── useInterests.ts
 │   │   │   └── useUser.ts
 │   │   ├── lib/
-│   │   │   ├── api.ts           # fetch ラッパー + トークン管理
+│   │   │   ├── api/
+│   │   │   │   ├── client.ts    # openapi-fetch + openapi-react-query クライアント
+│   │   │   │   └── v1.d.ts      # openapi-typescriptで自動生成（git管理外）
 │   │   │   └── utils.ts         # cn() ユーティリティ
-│   │   ├── types/
-│   │   │   └── index.ts         # 型定義
 │   │   ├── routes/
 │   │   │   └── index.tsx        # React Router v7 ルート定義
 │   │   ├── contexts/
@@ -97,6 +98,11 @@ News-Picker/
 │   ├── db/
 │   │   ├── migrate/
 │   │   └── schema.rb
+│   ├── doc/
+│   │   └── openapi.yaml         # rspec-openapiで自動生成
+│   ├── spec/
+│   │   ├── requests/            # APIリクエストスペック（OpenAPI仕様書の元）
+│   │   └── factories/
 │   ├── Gemfile
 │   └── ...
 └── README.md
@@ -125,6 +131,11 @@ gem 'sidekiq'               # バックグラウンドジョブ
 gem 'sidekiq-scheduler'     # 定期実行
 gem 'faraday'               # HTTP client (Tavily, Google AI)
 gem 'redis'
+
+# Test / OpenAPI
+gem 'rspec-rails'
+gem 'rspec-openapi'           # RSpecからOpenAPI仕様書を自動生成
+gem 'factory_bot_rails'
 ```
 
 ### 1-3. ActiveRecord モデル
@@ -349,43 +360,53 @@ npm create vite@latest frontend -- --template react-ts
     "@radix-ui/react-separator": "^1.0.0",
     "@radix-ui/react-slot": "^1.0.0",
     "@radix-ui/react-tooltip": "^1.0.0",
-    "class-variance-authority": "^0.7.0"
+    "class-variance-authority": "^0.7.0",
+    "openapi-fetch": "^0.13.0",
+    "openapi-react-query": "^0.3.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.0.0"
   }
 }
 ```
 
 **注意:**
-- **axiosは使わない** → ネイティブの `fetch` API を使用
-- Jotaiは純粋なUI状態（selectedDate, selectedInterest等）のために残す。サーバーデータはTanStack Queryに移行。
+- **axiosは使わない** → `openapi-fetch`（内部的にネイティブ `fetch` API を使用）
+- OpenAPI仕様書からの型自動生成でフロントとバックの型を常に同期
+- Jotaiは純粋なUI状態（selectedDate, selectedInterest等）のために残す。サーバーデータはTanStack Query（$api経由）に移行。
 
-### 2-3. API クライアント（fetch API ベース）
+### 2-3. API クライアント（OpenAPI + openapi-fetch ベース）
 
 ```typescript
-// src/lib/api.ts
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// src/lib/api/client.ts
+import createClient from 'openapi-fetch';
+import createQueryHooks from 'openapi-react-query';
+import type { paths } from './v1';  // openapi-typescriptで自動生成
 
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('auth-token');
-  if (!token) return {};
-  return { 'Authorization': `Bearer ${token}` };  // devise-jwt のJWTトークン
-}
+const client = createClient<paths>({
+  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+});
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...options.headers,
-    },
-  });
+// 認証トークンを自動付与するミドルウェア
+client.use({
+  async onRequest({ request }) {
+    const token = localStorage.getItem('auth-token');
+    if (token) request.headers.set('Authorization', `Bearer ${token}`);
+    return request;
+  },
+});
 
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
-  }
+export const $api = createQueryHooks(client, 'api');
+```
 
-  return response.json();
-}
+型生成コマンド:
+```bash
+# バックエンド: RSpecからOpenAPI仕様書を生成
+cd backend && OPENAPI=1 bundle exec rspec
+
+# フロントエンド: 型を自動生成
+cd frontend && npm run generate:api
+# => src/lib/api/v1.d.ts が生成される
 ```
 
 ### 2-4. React Router v7 ルート定義
@@ -426,75 +447,36 @@ const router = createBrowserRouter([
 ]);
 ```
 
-### 2-5. TanStack Query カスタムフック
+### 2-5. OpenAPI自動生成フック（$api）
+
+手動でuseQuery/useMutationフックを書く代わりに、$apiクライアントからHTTPメソッドとパスを指定するだけで型安全なフックが使える:
 
 ```typescript
-// src/hooks/useNews.ts
-export const useNews = (filters?: { date?: string; tag?: string }) => {
-  return useQuery({
-    queryKey: ['news', filters],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (filters?.date) params.set('date', filters.date);
-      if (filters?.tag) params.set('tag', filters.tag);
-      return api<NewsItem[]>(`/news?${params}`);
-    },
-  });
-};
+// ニュース一覧（フィルタ付き）
+const { data: news } = $api.useQuery('get', '/api/v1/news', {
+  params: { query: { date: selectedDate, tag: selectedInterest } },
+});
 
-// src/hooks/useInterests.ts
-export const useInterests = () => {
-  return useQuery({
-    queryKey: ['interests'],
-    queryFn: () => api<Interest[]>('/interests'),
-  });
-};
+// Interest一覧
+const { data: interests } = $api.useQuery('get', '/api/v1/interests');
 
-export const useCreateInterest = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (keyword: string) =>
-      api('/interests', { method: 'POST', body: JSON.stringify({ keyword }) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['interests'] }),
-  });
-};
+// Interest作成
+const createMutation = $api.useMutation('post', '/api/v1/interests');
+createMutation.mutate({ body: { interest: { keyword: 'React' } } });
 
-export const useUpdateInterest = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, keyword }: { id: number; keyword: string }) =>
-      api(`/interests/${id}`, { method: 'PATCH', body: JSON.stringify({ keyword }) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['interests'] }),
-  });
-};
+// Interest更新
+const updateMutation = $api.useMutation('patch', '/api/v1/interests/{id}');
+updateMutation.mutate({
+  params: { path: { id: interestId } },
+  body: { interest: { keyword: 'Vue' } },
+});
 
-export const useDeleteInterest = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) =>
-      api(`/interests/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['interests'] }),
-  });
-};
-
-// src/hooks/useAuth.ts
-export const useSignIn = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      api('/auth/sign_in', { method: 'POST', body: JSON.stringify({ email, password }) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['currentUser'] }),
-  });
-};
-
-export const useCurrentUser = () => {
-  return useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api<User>('/user'),
-    retry: false,
-  });
-};
+// Interest削除
+const deleteMutation = $api.useMutation('delete', '/api/v1/interests/{id}');
+deleteMutation.mutate({ params: { path: { id: interestId } } });
 ```
+
+認証フック（ログイン・サインアップ）はOpenAPIの$apiではなく専用フックとして残す（トークン管理ロジックがあるため）。
 
 ### 2-6. 認証コンテキスト
 

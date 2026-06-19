@@ -135,7 +135,84 @@ end</code></pre>
     <div class="file-label">backend/config/routes.rb（差分追加）</div>
     <pre><code>resources :news, only: [:index, :show]</code></pre>
 
-    <h2>4-3. シードデータ（開発用） <span class="section-tag tag-rails">Rails</span></h2>
+    <h2>4-3. RSpec リクエストスペック <span class="section-tag tag-rails">Rails</span></h2>
+
+    <div class="file-label">backend/spec/requests/api/v1/news_spec.rb</div>
+    <pre><code>require 'rails_helper'
+
+RSpec.describe 'Api::V1::News', type: :request do
+  let(:user) { create(:user) }
+  let(:token) { Warden::JWTAuth::UserEncoder.new.call(user, :user, nil).first }
+  let(:auth_headers) { { 'Authorization' =&gt; "Bearer #{token}" } }
+
+  describe 'GET /api/v1/news' do
+    before do
+      create(:news, user: user, title: 'React 19 Released', tag: 'React',
+             published_at: Date.new(2024, 6, 15))
+      create(:news, user: user, title: 'Rails 8 Preview', tag: 'Rails',
+             published_at: Date.new(2024, 6, 14))
+    end
+
+    it 'returns all news for the current user' do
+      get '/api/v1/news', headers: auth_headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json.length).to eq(2)
+    end
+
+    it 'filters by tag' do
+      get '/api/v1/news', params: { tag: 'React' },
+          headers: auth_headers, as: :json
+
+      json = JSON.parse(response.body)
+      expect(json.length).to eq(1)
+      expect(json.first['tag']).to eq('React')
+    end
+
+    it 'filters by date' do
+      get '/api/v1/news', params: { date: '2024-06-15' },
+          headers: auth_headers, as: :json
+
+      json = JSON.parse(response.body)
+      expect(json.length).to eq(1)
+    end
+  end
+
+  describe 'GET /api/v1/news/:id' do
+    let!(:news_item) { create(:news, user: user, title: 'Detail Test', text: 'Full text here') }
+
+    it 'returns news detail including text' do
+      get "/api/v1/news/#{news_item.id}",
+          headers: auth_headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json['title']).to eq('Detail Test')
+      expect(json['text']).to eq('Full text here')
+    end
+  end
+end</code></pre>
+
+    <div class="file-label">backend/spec/factories/news.rb</div>
+    <pre><code>FactoryBot.define do
+  factory :news do
+    user
+    title { Faker::Lorem.sentence }
+    text { Faker::Lorem.paragraph }
+    url { Faker::Internet.url }
+    tag { %w[React Rails AWS TypeScript].sample }
+    published_at { Faker::Time.backward(days: 30) }
+  end
+end</code></pre>
+
+    <pre><code># OpenAPI仕様書にNews APIを追記
+OPENAPI=1 bundle exec rspec spec/requests/api/v1/news_spec.rb
+
+# フロントの型を再生成
+cd ../frontend &amp;&amp; npm run generate:api</code></pre>
+
+    <h2>4-4. シードデータ（開発用） <span class="section-tag tag-rails">Rails</span></h2>
 
     <p>フロントエンド開発を進めるために、テストデータを投入する:</p>
 
@@ -167,7 +244,7 @@ puts "Seed data created: #{User.count} users, #{Interest.count} interests, #{New
       <code>find_or_create_by!</code> を使うことで、seedを何度実行しても同じデータが重複作成されない（冪等性）。開発中にDBをリセットせずseedを再実行できるので便利。
     </div>
 
-    <h2>4-4. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
+    <h2>4-5. curlで動作確認 <span class="section-tag tag-rails">Rails</span></h2>
 
     <pre><code># 全件取得
 curl http://localhost:3000/api/v1/news \
@@ -190,44 +267,40 @@ curl http://localhost:3000/api/v1/news/1 \
   -H "Authorization: Bearer YOUR_TOKEN"</code></pre>
 
     <!-- ==================== Frontend ==================== -->
-    <h2>4-5. フロントエンド: useNews フック <span class="section-tag tag-react">React</span></h2>
+    <h2>4-6. フロントエンド: OpenAPIフック <span class="section-tag tag-react">React</span></h2>
 
-    <div class="file-label">frontend/src/hooks/useNews.ts</div>
-    <pre><code>import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import type { NewsItem, NewsDetail } from '../types';
+    <p>Step 4-3のRSpecテストからOpenAPI仕様書が生成済み。<code>$api</code> を使って型安全にNews APIを呼び出す:</p>
 
-interface NewsFilters {
-  date?: string;   // "YYYY-MM-DD"
-  tag?: string;
-}
+    <div class="file-label">ニュース一覧取得（フィルタ付き）</div>
+    <pre><code>import { $api } from '../lib/api/client';
 
-export const useNews = (filters?: NewsFilters) =&gt; {
-  return useQuery({
-    queryKey: ['news', filters],
-    queryFn: () =&gt; {
-      const params = new URLSearchParams();
-      if (filters?.date) params.set('date', filters.date);
-      if (filters?.tag) params.set('tag', filters.tag);
-      const query = params.toString();
-      return api&lt;NewsItem[]&gt;(`/news${query ? `?${query}` : ''}`);
+// 一覧取得 — クエリパラメータも型安全
+const { data: news, isLoading } = $api.useQuery(
+  'get', '/api/v1/news',
+  {
+    params: {
+      query: {
+        date: selectedDate,    // string | undefined
+        tag: selectedInterest, // string | undefined
+      },
     },
-  });
-};
+  }
+);
 
-export const useNewsDetail = (id: string) =&gt; {
-  return useQuery({
-    queryKey: ['news', id],
-    queryFn: () =&gt; api&lt;NewsDetail&gt;(`/news/${id}`),
-    enabled: !!id,
-  });
-};</code></pre>
+// 詳細取得
+const { data: detail } = $api.useQuery(
+  'get', '/api/v1/news/{id}',
+  {
+    params: { path: { id: newsId } },
+  }
+);</code></pre>
 
     <div class="why-box">
-      <code>queryKey: ['news', filters]</code> — filtersオブジェクトをキーに含めることで、フィルタが変わるたびに自動的に再フェッチされる。同じフィルタ条件の結果はキャッシュから返される。TanStack Queryがオブジェクトの深い比較をしてくれるので、参照の一致を気にする必要がない。
+      <strong>手動フックとの違い:</strong> 従来の <code>useNews</code> フックでは <code>URLSearchParams</code> の組み立てやqueryKeyの設計を手動で行っていた。<code>$api.useQuery</code> ではパスとパラメータを指定するだけで、型チェック・queryKey生成・URL組み立てが全て自動化される。<br><br>
+      <code>query</code> パラメータに <code>undefined</code> の値がある場合は自動的に除外されるため、フィルタ条件の有無による分岐も不要。
     </div>
 
-    <h2>4-6. フロントエンド: Dashboard レイアウト設計 <span class="section-tag tag-react">React</span></h2>
+    <h2>4-7. フロントエンド: Dashboard レイアウト設計 <span class="section-tag tag-react">React</span></h2>
 
     <p>React Router v7のネストレイアウトで構成:</p>
 
@@ -259,20 +332,27 @@ export const useNewsDetail = (id: string) =&gt; {
 // selectedDateAtom: カレンダーで選択した日付
 // selectedInterestAtom: サイドバーで選択したInterest
 
-// DashboardPage でこれらをuseNewsに渡す:
+// DashboardPage で $api.useQuery に渡す:
 const [selectedDate] = useAtom(selectedDateAtom);
 const [selectedInterest] = useAtom(selectedInterestAtom);
 
-const { data: news, isLoading } = useNews({
-  date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
-  tag: selectedInterest,
-});</code></pre>
+const { data: news, isLoading } = $api.useQuery(
+  'get', '/api/v1/news',
+  {
+    params: {
+      query: {
+        date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
+        tag: selectedInterest,
+      },
+    },
+  }
+);</code></pre>
 
     <div class="why-box">
-      フィルタ状態（UI状態）は Jotai、サーバーデータ（ニュース一覧）は TanStack Query で管理する。この分離が重要: Jotaiのatomが変わる → useNewsのfiltersパラメータが変わる → queryKeyが変わる → 自動再フェッチ。明示的に「再取得」ロジックを書く必要がない。
+      フィルタ状態（UI状態）は Jotai、サーバーデータ（ニュース一覧）は TanStack Query（<code>$api</code> 経由）で管理する。この分離が重要: Jotaiのatomが変わる → <code>$api.useQuery</code> のparamsが変わる → queryKeyが変わる → 自動再フェッチ。明示的に「再取得」ロジックを書く必要がない。
     </div>
 
-    <h2>4-7. 動作確認チェックリスト</h2>
+    <h2>4-8. 動作確認チェックリスト</h2>
     <ol>
       <li>ダッシュボードにニュース一覧が表示される</li>
       <li>カレンダーで日付選択 → その日のニュースだけ表示される</li>
