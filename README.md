@@ -11,7 +11,7 @@ News Pickerは、ユーザーが登録したキーワード(Interest)に基づ�
 | フロントエンド | Next.js 15 | React 19 + Vite + TypeScript |
 | バックエンド | Next.js API Routes + Server Actions | Rails 7 API-only |
 | DB | PostgreSQL (Neon) + Prisma | PostgreSQL + ActiveRecord |
-| 認証 | Clerk | Devise |
+| 認証 | Clerk | Devise + devise-jwt |
 | 状態管理 | Jotai | TanStack Query |
 | ルーティング | Next.js App Router | React Router v7 |
 | UI | shadcn/ui + Tailwind CSS 4 | shadcn/ui + Tailwind CSS 4 (継続) |
@@ -91,7 +91,7 @@ News-Picker/
 │   │   ├── routes.rb
 │   │   ├── initializers/
 │   │   │   ├── cors.rb
-│   │   │   ├── devise.rb
+│   │   │   ├── devise.rb          # devise-jwt 設定含む
 │   │   │   └── sidekiq.rb
 │   │   └── sidekiq.yml
 │   ├── db/
@@ -118,6 +118,7 @@ rails new backend --api --database=postgresql --skip-test
 ```ruby
 # Gemfile
 gem 'devise'
+gem 'devise-jwt'
 gem 'rack-cors'
 gem 'jsonapi-serializer'    # JSON整形
 gem 'sidekiq'               # バックグラウンドジョブ
@@ -133,7 +134,8 @@ gem 'redis'
 ```ruby
 # User
 class User < ApplicationRecord
-  devise :database_authenticatable, :registerable, :validatable
+  devise :database_authenticatable, :registerable, :validatable,
+         :jwt_authenticatable, jwt_revocation_strategy: JwtDenylist
 
   has_many :interests, foreign_key: :user_id, dependent: :destroy
   has_many :news, foreign_key: :user_id, dependent: :destroy
@@ -164,6 +166,13 @@ create_table :users do |t|
   # devise が email, encrypted_password 等を追加
   t.timestamps
 end
+
+# jwt_denylists (トークン失効管理)
+create_table :jwt_denylists do |t|
+  t.string :jti, null: false
+  t.datetime :exp, null: false
+end
+add_index :jwt_denylists, :jti
 
 # interests
 create_table :interests do |t|
@@ -358,7 +367,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('auth-token');
   if (!token) return {};
-  return { 'Authorization': `Bearer ${token}` };
+  return { 'Authorization': `Bearer ${token}` };  // devise-jwt のJWTトークン
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -567,7 +576,7 @@ end
 - [ ] shadcn/uiコンポーネントの移植
 
 ### Step 2: 認証 (1-2日)
-- [ ] Devise のセットアップ
+- [ ] Devise + devise-jwt のセットアップ
 - [ ] User モデル + マイグレーション
 - [ ] 認証API（登録・ログイン・ログアウト）
 - [ ] CORS設定
@@ -621,7 +630,7 @@ DATABASE_URL=postgresql://...
 TAVILY_API_KEY=...
 GOOGLE_AI_API_KEY=...
 REDIS_URL=redis://localhost:6379
-DEVISE_SECRET_KEY=...
+DEVISE_JWT_SECRET_KEY=...
 ```
 
 ### frontend/.env

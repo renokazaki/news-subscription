@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>devise-jwt 詳細解説 | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; --purple: #8b5cf6; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .page-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 ポイント"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .column-box { background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 0.75rem; padding: 1.5rem; margin: 1.5rem 0; }
+    .column-box h3 { color: var(--purple); margin-top: 0; }
+    .compare-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    .compare-table th, .compare-table td { padding: 0.75rem; text-align: left; border: 1px solid var(--border); }
+    .compare-table th { background: var(--surface); color: var(--accent); }
+    .compare-table td { background: var(--code-bg); }
+    .good { color: var(--green); }
+    .bad { color: #ef4444; }
+    .neutral { color: var(--yellow); }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; white-space: pre; overflow-x: auto; line-height: 1.4; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem 1.5rem; margin-bottom: 2rem; }
+    .toc h3 { margin-top: 0; margin-bottom: 0.75rem; color: var(--text-muted); font-size: 0.9rem; }
+    .toc ol { margin: 0; padding-left: 1.25rem; }
+    .toc li { margin-bottom: 0.3rem; }
+    .toc a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
+
+    <h1>devise-jwt 詳細解説</h1>
+    <p class="page-meta">初心者向け | JWTの基礎からdevise-jwtの内部動作、revocation戦略まで</p>
+
+    <div class="toc">
+      <h3>目次</h3>
+      <ol>
+        <li><a href="#jwt-basics">JWTとは何か</a></li>
+        <li><a href="#jwt-structure">JWTの構造（Header / Payload / Signature）</a></li>
+        <li><a href="#session-vs-jwt">セッション認証 vs JWT認証</a></li>
+        <li><a href="#devise-jwt-overview">devise-jwtの仕組み</a></li>
+        <li><a href="#revocation">Revocation（トークン失効）戦略</a></li>
+        <li><a href="#security">セキュリティ上の注意点</a></li>
+        <li><a href="#column-token-auth">コラム: devise_token_auth との比較</a></li>
+      </ol>
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="jwt-basics">1. JWTとは何か</h2>
+
+    <p><strong>JWT（JSON Web Token）</strong>は、2者間で情報を安全にやり取りするためのトークン形式。RFC 7519で標準化されている。</p>
+
+    <p>一言で言うと「改ざん検知機能付きのJSON」。ユーザーIDなどの情報をJSONにエンコードし、秘密鍵で署名を付けたもの。受け取った側は署名を検証するだけでデータの正当性を確認できる。</p>
+
+    <h3>なぜAPI認証に使われるのか</h3>
+
+    <p>従来のWebアプリはサーバー側でセッション（ログイン状態）を保持していた。しかしAPI（特にSPA + バックエンド構成）では:</p>
+
+    <ul>
+      <li>フロントとバックが異なるドメインで動くため、Cookieの共有が面倒</li>
+      <li>サーバーをスケールアウト（複数台構成）する際にセッション共有が必要になる</li>
+      <li>モバイルアプリからも同じAPIを使いたい場合、Cookieは扱いにくい</li>
+    </ul>
+
+    <p>JWTなら <code>Authorization: Bearer eyJ...</code> ヘッダーを送るだけ。サーバー側に状態を持たない（ステートレス）ので、どのサーバーに到達しても認証できる。</p>
+
+    <!-- ============================= -->
+    <h2 id="jwt-structure">2. JWTの構造</h2>
+
+    <p>JWTは3つのパートを <code>.</code> で連結した文字列:</p>
+
+    <pre><code>eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImp0aSI6ImFiYzEyMyIsImV4cCI6MTcxOTAwMDAwMH0.Xk3RF8Mqz...</code></pre>
+
+    <div class="flow-diagram">
+┌─────────────────┐  ┌──────────────────────────────────┐  ┌──────────────────┐
+│    Header        │.│          Payload                  │.│    Signature     │
+│                  │ │                                    │ │                  │
+│ {                │ │ {                                  │ │ HMACSHA256(      │
+│   "alg": "HS256" │ │   "sub": "1",    ← ユーザーID     │ │   header + "." + │
+│ }                │ │   "scp": "user",  ← スコープ       │ │   payload,       │
+│                  │ │   "jti": "abc123",← トークンID     │ │   SECRET_KEY     │
+│ Base64URL encode │ │   "exp": 17190..  ← 有効期限       │ │ )                │
+└─────────────────┘  │ }                                  │ └──────────────────┘
+                     │                                    │
+                     │ Base64URL encode                   │
+                     └──────────────────────────────────┘</div>
+
+    <h3>各パートの役割</h3>
+
+    <ul>
+      <li><strong>Header</strong>: 署名アルゴリズム（HS256 = HMAC-SHA256）を指定。「このトークンはどうやって検証すればいいか」を示す</li>
+      <li><strong>Payload</strong>: 実際のデータ（クレーム）。ユーザーID、有効期限、トークンIDなどが入る</li>
+      <li><strong>Signature</strong>: Header + Payload を秘密鍵で署名したもの。改ざんされていないことを証明する</li>
+    </ul>
+
+    <div class="why-box">
+      <strong>重要: PayloadはBase64URLエンコードであって暗号化ではない。</strong> デコードすれば誰でも中身を読める。だからパスワードやクレジットカード番号など機密情報はPayloadに入れてはいけない。Signatureは「中身が改ざんされていないこと」を保証するだけで、「中身を隠す」ためのものではない。
+    </div>
+
+    <h3>devise-jwtが生成するPayloadの中身</h3>
+
+    <pre><code>{
+  "sub": "1",          // subject: ユーザーID（User.find(1)で検索する）
+  "scp": "user",       // scope: Deviseのモデル名（User）
+  "aud": null,         // audience: 対象クライアント（未使用の場合null）
+  "jti": "abc12345-...",  // JWT ID: このトークンの一意識別子（denylistで使う）
+  "iat": 1719000000,   // issued at: 発行日時（UNIX timestamp）
+  "exp": 1719086400    // expiration: 有効期限（UNIX timestamp）
+}</code></pre>
+
+    <div class="why-box">
+      <strong><code>jti</code>（JWT ID）が重要な理由:</strong> JWTはステートレスなので、一度発行したトークンはサーバー側から直接無効化できない。<code>jti</code> はトークンごとにユニークなIDで、ログアウト時にこの値をDBに記録（denylist）することで「特定のトークンだけを無効化」できる。
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="session-vs-jwt">3. セッション認証 vs JWT認証</h2>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>セッション認証</th>
+          <th>JWT認証</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>状態管理</strong></td>
+          <td>サーバー側で保持（ステートフル）</td>
+          <td>クライアント側で保持（ステートレス）</td>
+        </tr>
+        <tr>
+          <td><strong>保存場所</strong></td>
+          <td>サーバー: メモリ/Redis/DB<br>クライアント: Cookie</td>
+          <td>クライアント: localStorage/Cookie</td>
+        </tr>
+        <tr>
+          <td><strong>スケーラビリティ</strong></td>
+          <td class="neutral">複数サーバーでセッション共有が必要</td>
+          <td class="good">どのサーバーでも検証可能</td>
+        </tr>
+        <tr>
+          <td><strong>ログアウト</strong></td>
+          <td class="good">サーバーのセッションを消すだけ</td>
+          <td class="neutral">denylistなどの仕組みが必要</td>
+        </tr>
+        <tr>
+          <td><strong>CSRF対策</strong></td>
+          <td>Cookie使用のため必要</td>
+          <td class="good">Authorizationヘッダー使用なら不要</td>
+        </tr>
+        <tr>
+          <td><strong>Rails API-only</strong></td>
+          <td class="bad">セッションミドルウェアの追加が必要</td>
+          <td class="good">ミドルウェア不要で導入可能</td>
+        </tr>
+        <tr>
+          <td><strong>モバイル対応</strong></td>
+          <td class="neutral">Cookieの扱いが複雑</td>
+          <td class="good">ヘッダーに載せるだけ</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      今回のプロジェクトでJWTを選ぶ理由:
+      <ul style="margin-top:0.5rem">
+        <li>Rails API-onlyモードでセッション管理の追加設定が不要</li>
+        <li>React SPA（別オリジン）からのアクセスでCookie共有の問題を回避</li>
+        <li>将来モバイルアプリからも同じAPIを使える拡張性</li>
+        <li>ECS Fargateで複数コンテナにスケールしてもセッション共有が不要</li>
+      </ul>
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="devise-jwt-overview">4. devise-jwtの仕組み</h2>
+
+    <p>devise-jwtは <strong>Deviseのフック</strong> を利用して、認証フローにJWTの生成・検証を自動的に差し込む。</p>
+
+    <h3>内部の処理フロー</h3>
+
+    <div class="flow-diagram">
+【ログイン時】
+  1. ユーザーが email + password を POST
+  2. Devise が email でユーザーを検索
+  3. Devise が bcrypt でパスワードを検証
+  4. ✅ 検証成功
+  5. devise-jwt が dispatch_requests にマッチするか確認
+  6. マッチ → UserEncoder でJWT生成:
+     - sub: user.id
+     - jti: SecureRandom.uuid
+     - exp: Time.now + expiration_time
+     - 秘密鍵で署名
+  7. レスポンスの Authorization ヘッダーにJWTを付与
+
+【認証済みリクエスト時】
+  1. Authorization: Bearer eyJ... ヘッダーを受信
+  2. devise-jwt が JWT をデコード（署名検証 + 有効期限チェック）
+  3. denylist テーブルに jti が存在するかチェック
+  4. ❌ denylist にある → 401 Unauthorized
+  5. ✅ denylist にない → sub からユーザーをDB検索
+  6. current_user にセット
+
+【ログアウト時】
+  1. DELETE リクエストを受信
+  2. devise-jwt が revocation_requests にマッチするか確認
+  3. マッチ → JWT の jti を denylist テーブルに INSERT
+  4. 以降同じ jti のトークンは認証拒否される</div>
+
+    <h3>Warden との関係</h3>
+
+    <p>Deviseは内部でRack認証フレームワーク「Warden」を使っている。devise-jwtはWardenのストラテジー（認証方法）として登録される。</p>
+
+    <pre><code># devise-jwt が内部で行っていること（概念的なコード）
+Warden::JWTAuth.configure do |config|
+  config.secret = 'your-secret-key'
+  config.dispatch_requests = [['POST', /sign_in/]]
+  config.revocation_requests = [['DELETE', /sign_out/]]
+end
+
+# Warden strategy として JWT 検証を登録
+Warden::Strategies.add(:jwt, Warden::JWTAuth::Strategy)</code></pre>
+
+    <div class="why-box">
+      devise-jwtを使う利点は「Deviseの認証フローに自然にJWTが統合される」こと。Deviseの <code>:database_authenticatable</code>（パスワード認証）はそのまま使い、認証成功後のトークン発行だけをJWTに差し替える。自前でJWTの生成・検証ロジックを書く必要がない。
+    </div>
+
+    <!-- ============================= -->
+    <h2 id="revocation">5. Revocation（トークン失効）戦略</h2>
+
+    <p>JWTのログアウト問題: JWTは有効期限内であれば誰でも使える。ログアウト時に「このトークンをもう使えなくする」仕組みが必要。</p>
+
+    <p>devise-jwt は3つの戦略を提供している:</p>
+
+    <h3>5-1. Denylist 方式（今回採用）</h3>
+
+    <p>失効させたいトークンの <code>jti</code> をDBテーブルに記録する。</p>
+
+    <pre><code># ログアウト時
+JwtDenylist.create!(jti: "abc123", exp: 1719086400)
+
+# 認証時のチェック
+JwtDenylist.exists?(jti: token_jti)  # true → 認証拒否</code></pre>
+
+    <ul>
+      <li class="good" style="color: var(--green);">メリット: ログアウトしたトークンだけを無効化。他のセッション（別デバイス）は影響なし</li>
+      <li class="bad" style="color: #ef4444;">デメリット: リクエストごとにDBクエリが発生する（indexがあるので高速だが）</li>
+      <li class="good" style="color: var(--green);">メリット: 期限切れレコードを定期削除すればテーブルは肥大化しない</li>
+    </ul>
+
+    <h3>5-2. JTIMatcher 方式</h3>
+
+    <p>ユーザーテーブルに <code>jti</code> カラムを追加し、現在有効なトークンのjtiを保存する。</p>
+
+    <pre><code># users テーブルに jti カラム追加
+# ログイン時にユーザーの jti を更新
+user.update!(jti: SecureRandom.uuid)
+
+# 認証時: トークンの jti とDBの jti が一致するか確認
+user.jti == token_jti  # false → 認証拒否</code></pre>
+
+    <ul>
+      <li class="good" style="color: var(--green);">メリット: 別テーブル不要。ユーザーテーブルだけで完結</li>
+      <li class="bad" style="color: #ef4444;">デメリット: 1ユーザー1トークンしか有効にできない。別デバイスでログインすると前のトークンが無効化される</li>
+    </ul>
+
+    <h3>5-3. Allowlist 方式</h3>
+
+    <p>有効なトークンを専用テーブルに保存し、テーブルにないトークンは全て拒否する。</p>
+
+    <pre><code># ログイン時にallowlistテーブルにINSERT
+AllowlistedJwt.create!(jti: "abc123", user: user, exp: ...)
+
+# 認証時: allowlistに存在するか確認
+AllowlistedJwt.exists?(jti: token_jti)  # false → 認証拒否
+
+# ログアウト時: allowlistから削除
+AllowlistedJwt.find_by(jti: token_jti).destroy</code></pre>
+
+    <ul>
+      <li class="good" style="color: var(--green);">メリット: 「全セッション一括ログアウト」が容易（ユーザーのレコードを全削除）</li>
+      <li class="bad" style="color: #ef4444;">デメリット: テーブルが大きくなりやすい（全有効トークンを保持）</li>
+    </ul>
+
+    <div class="why-box">
+      <strong>今回 Denylist を選んだ理由:</strong> 複数デバイスからのログインを許容しつつ、個別のログアウトが可能。denylistテーブルは期限切れレコードを削除すれば小さく保てる。JTIMatcherは「1デバイスのみ」の制約が強すぎ、Allowlistは今回のアプリ規模にはオーバー。
+    </div>
+
+    <h3>Denylist のクリーンアップ</h3>
+
+    <p>期限切れのトークンはdenylistに残しておく意味がない。定期的に削除する:</p>
+
+    <pre><code># Rakeタスクまたは Sidekiq Scheduler で定期実行
+JwtDenylist.where('exp &lt; ?', Time.current).delete_all</code></pre>
+
+    <!-- ============================= -->
+    <h2 id="security">6. セキュリティ上の注意点</h2>
+
+    <h3>秘密鍵の管理</h3>
+
+    <div class="warn-box">
+      <code>DEVISE_JWT_SECRET_KEY</code> は最も重要な秘密情報。この鍵が漏洩すると:
+      <ul style="margin-top:0.5rem">
+        <li>攻撃者が任意のユーザーになりすましたJWTを生成できる</li>
+        <li>denylistを無視してログアウト済みトークンを再発行できる</li>
+        <li>全ユーザーのアカウントが乗っ取り可能になる</li>
+      </ul>
+      必ず <code>.env</code>（<code>.gitignore</code>に含める）か、AWS Secrets Managerなどで管理する。
+    </div>
+
+    <h3>トークンの保存場所（フロントエンド）</h3>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>保存場所</th>
+          <th>XSS耐性</th>
+          <th>CSRF耐性</th>
+          <th>備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>localStorage</code></td>
+          <td class="bad">弱い（JSでアクセス可）</td>
+          <td class="good">強い（Cookie不使用）</td>
+          <td>今回採用。XSS対策はCSP等で別途行う</td>
+        </tr>
+        <tr>
+          <td><code>httpOnly Cookie</code></td>
+          <td class="good">強い（JSからアクセス不可）</td>
+          <td class="bad">弱い（CSRF対策が必要）</td>
+          <td>Rails側でSet-Cookieする実装が必要</td>
+        </tr>
+        <tr>
+          <td>メモリ（変数）</td>
+          <td class="good">強い</td>
+          <td class="good">強い</td>
+          <td>リロードで消える。リフレッシュトークンが必要</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      今回は <code>localStorage</code> を採用。最もシンプルで学習コストが低い。XSS脆弱性があるとトークンが盗まれるリスクがあるが、React + Viteの構成ではデフォルトでJSXのエスケープが効くため基本的にXSSは防がれる。追加でContent Security Policy（CSP）ヘッダーを設定すればさらに安全。
+    </div>
+
+    <h3>有効期限の設計</h3>
+
+    <ul>
+      <li><strong>短すぎる（5分等）</strong>: 頻繁に再ログインが必要でUX悪い。リフレッシュトークンの実装が必須になる</li>
+      <li><strong>長すぎる（30日等）</strong>: トークン漏洩時の被害期間が長い</li>
+      <li><strong>推奨: 1〜24時間</strong>: 今回は24時間。日常的に使うアプリなら1時間 + リフレッシュトークンも検討</li>
+    </ul>
+
+    <!-- ============================= -->
+    <h2 id="column-token-auth">コラム: devise_token_auth との比較</h2>
+
+    <div class="column-box">
+      <h3>devise_token_auth とは</h3>
+
+      <p><strong>devise_token_auth</strong>（DTA）は、DeviseにAPI向けトークン認証を追加する別のgem。devise-jwtとは異なるアプローチを取る。</p>
+
+      <h3>DTAの仕組み</h3>
+
+      <p>DTAは「毎回トークンが変わる」ユニークな設計を持つ:</p>
+
+      <ol>
+        <li>ログイン成功 → <code>access-token</code>, <code>client</code>, <code>uid</code> の3つのヘッダーを返す</li>
+        <li>クライアントは次のリクエストでこの3つを送信</li>
+        <li>サーバーは認証後、<strong>新しい</strong> access-token をレスポンスに付けて返す</li>
+        <li>クライアントは毎回トークンを更新する必要がある</li>
+      </ol>
+
+      <pre><code># DTAのレスポンスヘッダー（毎回変わる）
+access-token: NEW_TOKEN_EVERY_TIME
+client:       client_id_string
+uid:          user@example.com
+token-type:   Bearer
+expiry:       1719086400</code></pre>
+
+      <h3>devise-jwt vs devise_token_auth</h3>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>devise-jwt</th>
+            <th>devise_token_auth</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>トークン形式</strong></td>
+            <td>JWT（自己完結型）</td>
+            <td>ランダム文字列（DBに保存）</td>
+          </tr>
+          <tr>
+            <td><strong>ヘッダー数</strong></td>
+            <td>1つ（Authorization）</td>
+            <td>4つ（access-token, client, uid, token-type）</td>
+          </tr>
+          <tr>
+            <td><strong>トークン更新</strong></td>
+            <td>有効期限まで同じトークン</td>
+            <td>リクエストごとに新しいトークン</td>
+          </tr>
+          <tr>
+            <td><strong>DB依存</strong></td>
+            <td>denylistのみ（最小限）</td>
+            <td>users.tokensカラムに全トークン保存</td>
+          </tr>
+          <tr>
+            <td><strong>ステートレス性</strong></td>
+            <td class="good">高い（署名検証のみ）</td>
+            <td class="bad">低い（DB照合が毎回必要）</td>
+          </tr>
+          <tr>
+            <td><strong>メンテナンス</strong></td>
+            <td class="good">活発（2024年も更新あり）</td>
+            <td class="neutral">停滞気味（長期間更新なし）</td>
+          </tr>
+          <tr>
+            <td><strong>フロントの実装</strong></td>
+            <td class="good">シンプル（1ヘッダー管理）</td>
+            <td class="neutral">複雑（4ヘッダー管理 + 毎回更新）</td>
+          </tr>
+          <tr>
+            <td><strong>セットアップ</strong></td>
+            <td>Devise + gem追加 + 設定</td>
+            <td>専用ジェネレーター（Deviseとは別にインストール）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>DTAの「毎回トークン更新」の問題</h3>
+
+      <p>DTAの設計では、1つのAPIレスポンスに新しいトークンが含まれ、次のリクエストではその新しいトークンを使う必要がある。これは理論上はセキュリティ向上（盗まれたトークンの有効期間が短い）だが、実際には問題が多い:</p>
+
+      <ul>
+        <li><strong>同時リクエスト問題</strong>: 2つのAPIリクエストを並行で送ると、先に返ったレスポンスのトークンで後のリクエストが認証失敗する</li>
+        <li><strong>フロント実装の複雑化</strong>: レスポンスヘッダーからトークンを毎回読み取り・保存するロジックが必要</li>
+        <li><strong>デバッグの困難さ</strong>: トークンが常に変わるため、curlでの手動テストが面倒</li>
+      </ul>
+
+      <h3>結論: なぜdevise-jwtを選んだか</h3>
+
+      <ul>
+        <li>フロントエンド実装がシンプル（Authorizationヘッダー1つだけ）</li>
+        <li>JWTはWeb標準で、他のサービスやモバイルアプリとも連携しやすい</li>
+        <li>gemのメンテナンスが活発で、Rails 7 / Ruby 3 対応もスムーズ</li>
+        <li>TanStack Queryの並行リクエストと相性が良い（トークンが変わらないため）</li>
+      </ul>
+    </div>
+
+    <!-- ============================= -->
+    <h2>まとめ</h2>
+
+    <ul>
+      <li><strong>JWT</strong> = 署名付きJSONトークン。ステートレスでスケーラブル</li>
+      <li><strong>devise-jwt</strong> = DeviseのフローにJWT発行・検証を統合するgem</li>
+      <li><strong>Denylist方式</strong> = ログアウト時にトークンIDを記録して失効させる</li>
+      <li><strong>devise_token_auth</strong> = 代替手段だが、毎回トークン更新の設計が複雑。devise-jwtの方がシンプル</li>
+      <li>秘密鍵の管理とトークン保存場所のセキュリティに注意</li>
+    </ul>
+
+    <div class="nav-footer">
+      <a href="step2-authentication.html">← Step 2: 認証ハンズオンに戻る</a>
+      <a href="index.html">ガイド一覧に戻る →</a>
+    </div>
+  </div>
+</body>
+</html>
