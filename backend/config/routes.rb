@@ -12,6 +12,8 @@ Rails.application.routes.draw do
       end
 
       resource :user, only: [:show, :update]
+      resources :interests, only: [:index, :create, :update, :destroy]
+
     end
   end
 end

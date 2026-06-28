@@ -35,6 +35,8 @@
     .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
     .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
     .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+    .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .flow-diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8rem; line-height: 1.6; font-family: 'JetBrains Mono', 'Fira Code', monospace; white-space: pre; color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -283,118 +285,421 @@ curl -X DELETE http://localhost:3000/api/v1/interests/1 \
 # => 204 No Content</code></pre>
 
     <!-- ==================== Frontend ==================== -->
-    <h2>3-5. フロントエンド: OpenAPI + TanStack Query <span class="section-tag tag-react">React</span></h2>
+    <h2>3-5. フロントエンド: Interest 型定義 <span class="section-tag tag-react">React</span></h2>
 
-    <p>Server Actions から OpenAPI自動生成フックへの移行パターン:</p>
+    <p>まず、バックエンドのAPIレスポンスに合わせた型を定義する。</p>
 
-    <h3>移行前（Next.js Server Actions）</h3>
-    <pre><code>// Before: Server Action
-"use server"
-export async function postInterestAction(keyword: string) {
-  await prisma.interest.create({ data: { keyword, userId } });
-  revalidatePath("/dashboard");
-}</code></pre>
-
-    <h3>移行後（openapi-react-query）</h3>
-
-    <p>Step 3-3 で書いたRSpecテストからOpenAPI仕様書を生成し、フロントの型とフックを自動生成する:</p>
-
-    <pre><code># バックエンド: テストを実行してOpenAPI仕様書を更新
-cd backend
-OPENAPI=1 bundle exec rspec spec/requests/api/v1/interests_spec.rb
-
-# フロントエンド: 型を再生成
-cd ../frontend
-npm run generate:api</code></pre>
-
-    <p>生成された型を使って、<code>$api</code> クライアント経由でAPI呼び出し:</p>
-
-    <div class="file-label">frontend/src/lib/api/client.ts（Step 1で作成済み、詳細はOpenAPI解説参照）</div>
-    <pre><code>import createClient from 'openapi-fetch';
-import createQueryHooks from 'openapi-react-query';
-import type { paths } from './v1'; // openapi-typescriptで自動生成された型
-
-const client = createClient&lt;paths&gt;({
-  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
-});
-
-// 認証トークンを自動付与するミドルウェア
-client.use({
-  async onRequest({ request }) {
-    const token = localStorage.getItem('auth-token');
-    if (token) request.headers.set('Authorization', `Bearer ${token}`);
-    return request;
-  },
-});
-
-export const $api = createQueryHooks(client, 'api');</code></pre>
-
-    <div class="file-label">コンポーネントでの使用例</div>
-    <pre><code>// 一覧取得 — queryKey, queryFn を手書きする必要がない
-const { data: interests, isLoading } = $api.useQuery(
-  'get', '/api/v1/interests'
-);
-
-// 作成
-const createMutation = $api.useMutation('post', '/api/v1/interests');
-createMutation.mutate({ body: { interest: { keyword: 'TypeScript' } } });
-
-// 更新
-const updateMutation = $api.useMutation('patch', '/api/v1/interests/{id}');
-updateMutation.mutate({
-  params: { path: { id: interestId } },
-  body: { interest: { keyword: 'React' } },
-});
-
-// 削除
-const deleteMutation = $api.useMutation('delete', '/api/v1/interests/{id}');
-deleteMutation.mutate({ params: { path: { id: interestId } } });</code></pre>
+    <div class="file-label">frontend/src/types/interest.ts</div>
+    <pre><code>export type Interest = {
+  id: number;
+  keyword: string;
+  created_at: string;
+};</code></pre>
 
     <div class="why-box">
-      <strong>手動フックとの違い:</strong> 従来は <code>useInterests</code>, <code>useCreateInterest</code>, <code>useUpdateInterest</code>, <code>useDeleteInterest</code> を1つずつ手書きしていた。<code>$api</code> を使えば、HTTPメソッドとパスを指定するだけで型安全なフックが使える。queryKeyもパスから自動生成される。<br><br>
-      <strong>移行パターン:</strong> Next.jsの <code>revalidatePath()</code> に相当するキャッシュ無効化は、<code>onSuccess</code> で <code>queryClient.invalidateQueries()</code> を呼ぶ。<code>$api.useMutation</code> のコールバックで同じパターンが使える。
+      バックエンドの <code>interest_response</code> メソッドが返すJSONの形状と一致させる。TypeScriptの型を明示することで、フロントエンド全体でAPIレスポンスを安全に扱える。
     </div>
 
-    <div class="tip-box">
-      OpenAPIクライアントのセットアップ詳細やミドルウェアの仕組みについては <a href="openapi-workflow.html" style="color: var(--accent);">OpenAPIワークフロー解説</a> を参照。
-    </div>
+    <h2>3-6. フロントエンド: useInterests フック <span class="section-tag tag-react">React</span></h2>
 
-    <h2>3-6. フロントエンド: UIコンポーネント（概要） <span class="section-tag tag-react">React</span></h2>
+    <p>Step 2 で学んだ TanStack Query のパターンを使い、Interest の CRUD 操作をカスタムフックにまとめる。</p>
 
-    <p>Interest管理UIのポイントだけ整理:</p>
+    <div class="file-label">frontend/src/hooks/useInterests.ts</div>
+    <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type { Interest } from '@/types/interest';
 
-    <ul>
-      <li>作成/編集は <code>react-hook-form</code> + <code>zod</code> バリデーション</li>
-      <li>削除は確認ダイアログ（shadcn/ui <code>AlertDialog</code>）を挟む</li>
-      <li><code>useMutation</code> の <code>isPending</code> でボタンのローディング状態を表示</li>
-      <li>エラー時は <code>sonner</code> の toast でユーザーに通知</li>
-    </ul>
-
-    <pre><code>// 使い方の例（$api.useMutation）
-const createMutation = $api.useMutation('post', '/api/v1/interests');
-
-const onSubmit = (data: { keyword: string }) =&gt; {
-  createMutation.mutate(
-    { body: { interest: { keyword: data.keyword } } },
-    {
-      onSuccess: () =&gt; toast.success('登録しました'),
-      onError: (err) =&gt; toast.error(err.message),
-    }
-  );
+// ① 一覧取得（useQuery）
+export const useInterests = () =&gt; {
+  return useQuery({
+    queryKey: ['interests'],
+    queryFn: () =&gt; api&lt;Interest[]&gt;('/interests'),
+  });
 };
 
-// isPending で送信中状態を取得
-&lt;Button disabled={createMutation.isPending}&gt;
-  {createMutation.isPending ? '登録中...' : '登録'}
-&lt;/Button&gt;</code></pre>
+// ② 作成（useMutation）
+export const useCreateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyword: string) =&gt;
+      api&lt;Interest&gt;('/interests', {
+        method: 'POST',
+        body: JSON.stringify({ interest: { keyword } }),
+      }),
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['interests'] });
+    },
+  });
+};
 
-    <h2>3-7. 動作確認チェックリスト</h2>
+// ③ 更新（useMutation）
+export const useUpdateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, keyword }: { id: number; keyword: string }) =&gt;
+      api&lt;Interest&gt;(`/interests/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ interest: { keyword } }),
+      }),
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['interests'] });
+    },
+  });
+};
+
+// ④ 削除（useMutation）
+export const useDeleteInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =&gt;
+      api&lt;void&gt;(`/interests/${id}`, { method: 'DELETE' }),
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: ['interests'] });
+    },
+  });
+};</code></pre>
+
+    <div class="warn-box">
+      <strong>DELETE の 204 No Content に注意:</strong><br>
+      バックエンドの <code>destroy</code> アクションは <code>head :no_content</code>（ステータス204、ボディなし）を返す。<code>api()</code> ヘルパーで <code>response.json()</code> を無条件に呼ぶと、空ボディをパースしようとして <code>Unexpected end of JSON input</code> エラーになる。対策として <code>api.ts</code> に204判定を追加する:
+      <pre><code>  // 204 No Content はボディがないので json() を呼ばない
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json();</code></pre>
+    </div>
+
+    <div class="why-box">
+      <strong>4つのフックが同じパターンを繰り返している点に注目。</strong> TanStack Query での CRUD は以下の公式に当てはめるだけ:
+      <ul style="margin-top:0.5rem">
+        <li><strong>読み取り</strong> → <code>useQuery</code> + <code>queryKey</code> + <code>queryFn</code></li>
+        <li><strong>書き込み</strong> → <code>useMutation</code> + <code>mutationFn</code> + <code>onSuccess: invalidateQueries</code></li>
+      </ul>
+      <code>invalidateQueries({ queryKey: ['interests'] })</code> が全ての書き込みフックに入っている理由: 作成・更新・削除のいずれかが成功したら、一覧のキャッシュを無効化 → 自動で <code>GET /interests</code> が再実行 → UIに最新の一覧が表示される。
+    </div>
+
+    <div class="flow-diagram">
+【CRUD操作時のデータフロー】
+
+  ユーザー操作         TanStack Query           Rails API
+  ─────────────────────────────────────────────────────────
+  「登録」ボタン押下
+    └→ createInterest.mutate('TypeScript')
+        └→ POST /api/v1/interests ──────────→ Interest作成
+                                              ← 201 Created
+        └→ onSuccess
+            └→ invalidateQueries(['interests'])
+                └→ useInterests が自動で再fetch
+                    └→ GET /api/v1/interests ─→ 最新一覧返却
+                                                ← 200 OK
+                    └→ UIが自動で再レンダリング
+                        └→ 新しいキーワードが一覧に表示される</div>
+
+    <h2>3-7. フロントエンド: InterestForm コンポーネント <span class="section-tag tag-react">React</span></h2>
+
+    <p>キーワードの入力フォーム。作成と編集の両方で再利用する。</p>
+
+    <div class="file-label">frontend/src/components/interests/InterestForm.tsx</div>
+    <pre><code>import { useForm } from 'react-hook-form';
+import { z } from 'zod/v4';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+// ① zodでバリデーションルールを定義
+const interestSchema = z.object({
+  keyword: z
+    .string()
+    .min(1, 'キーワードを入力してください')
+    .max(20, 'キーワードは20文字以内で入力してください'),
+});
+
+type InterestFormData = z.infer&lt;typeof interestSchema&gt;;
+
+type Props = {
+  defaultValue?: string;       // 編集時の初期値
+  onSubmit: (keyword: string) =&gt; void;
+  onCancel?: () =&gt; void;       // 編集モードのキャンセルボタン
+  isPending: boolean;          // useMutation.isPending を渡す
+  submitLabel?: string;        // ボタンのラベル（「登録」or「更新」）
+};
+
+export function InterestForm({
+  defaultValue = '',
+  onSubmit,
+  onCancel,
+  isPending,
+  submitLabel = '登録',
+}: Props) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm&lt;InterestFormData&gt;({
+    resolver: zodResolver(interestSchema),  // ② zodスキーマをreact-hook-formに接続
+    defaultValues: { keyword: defaultValue },
+  });
+
+  const handleFormSubmit = (data: InterestFormData) =&gt; {
+    onSubmit(data.keyword);
+    if (!defaultValue) reset();  // 新規作成時だけフォームをクリア
+  };
+
+  return (
+    &lt;form onSubmit={handleSubmit(handleFormSubmit)} className="flex gap-2"&gt;
+      &lt;div className="flex-1 space-y-1"&gt;
+        &lt;Label htmlFor="keyword" className="sr-only"&gt;キーワード&lt;/Label&gt;
+        &lt;Input
+          id="keyword"
+          placeholder="例: TypeScript, AWS, React..."
+          {...register('keyword')}   {/* ③ react-hook-formが入力を管理 */}
+        /&gt;
+        {errors.keyword &amp;&amp; (
+          &lt;p className="text-xs text-destructive"&gt;{errors.keyword.message}&lt;/p&gt;
+        )}
+      &lt;/div&gt;
+      &lt;Button type="submit" disabled={isPending}&gt;
+        {isPending ? '処理中...' : submitLabel}
+      &lt;/Button&gt;
+      {onCancel &amp;&amp; (
+        &lt;Button type="button" variant="outline" onClick={onCancel}&gt;
+          キャンセル
+        &lt;/Button&gt;
+      )}
+    &lt;/form&gt;
+  );
+}</code></pre>
+
+    <h3>react-hook-form + zod の仕組み</h3>
+
+    <div class="why-box">
+      <strong>3つのライブラリの役割分担:</strong>
+      <ul style="margin-top:0.5rem">
+        <li><strong>zod</strong> — バリデーションルールの定義。<code>z.string().min(1).max(20)</code> のようにチェーンで書ける。TypeScriptの型も自動推論される</li>
+        <li><strong>react-hook-form</strong> — フォーム状態の管理。<code>register('keyword')</code> でinputの値変更を追跡し、<code>handleSubmit</code> でバリデーション後にコールバックを呼ぶ</li>
+        <li><strong>@hookform/resolvers/zod</strong> — 両者を繋ぐアダプタ。<code>zodResolver(schema)</code> で、react-hook-formのバリデーションにzodスキーマを使える</li>
+      </ul>
+    </div>
+
+    <div class="why-box">
+      <strong><code>Props</code> の設計意図:</strong><br>
+      このコンポーネントは「新規作成」と「編集」の2箇所で使い回される。違いは:
+      <ul style="margin-top:0.5rem">
+        <li><strong>新規作成:</strong> <code>defaultValue</code> なし、<code>onCancel</code> なし、<code>submitLabel = '登録'</code></li>
+        <li><strong>編集:</strong> <code>defaultValue = 'React'</code>、<code>onCancel</code> あり（編集モード解除）、<code>submitLabel = '更新'</code></li>
+      </ul>
+      <code>isPending</code> を外から受け取ることで、親コンポーネント側のmutationの進行状態に連動してボタンを無効化できる。
+    </div>
+
+    <h2>3-8. フロントエンド: InterestList コンポーネント <span class="section-tag tag-react">React</span></h2>
+
+    <p>一覧表示 + CRUD操作を統合するメインコンポーネント。</p>
+
+    <div class="file-label">frontend/src/components/interests/InterestList.tsx</div>
+    <pre><code>import { useState } from 'react';
+import { toast } from 'sonner';
+import { Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { InterestForm } from './InterestForm';
+import {
+  useInterests,
+  useCreateInterest,
+  useUpdateInterest,
+  useDeleteInterest,
+} from '@/hooks/useInterests';
+
+export function InterestList() {
+  const { data: interests, isLoading } = useInterests();
+  const createInterest = useCreateInterest();
+  const updateInterest = useUpdateInterest();
+  const deleteInterest = useDeleteInterest();
+  const [editingId, setEditingId] = useState&lt;number | null&gt;(null);
+
+  // ① 作成
+  const handleCreate = (keyword: string) =&gt; {
+    createInterest.mutate(keyword, {
+      onSuccess: () =&gt; toast.success('キーワードを登録しました'),
+      onError: (err) =&gt; toast.error(err.message),
+    });
+  };
+
+  // ② 更新
+  const handleUpdate = (id: number, keyword: string) =&gt; {
+    updateInterest.mutate(
+      { id, keyword },
+      {
+        onSuccess: () =&gt; {
+          toast.success('キーワードを更新しました');
+          setEditingId(null);  // 編集モードを解除
+        },
+        onError: (err) =&gt; toast.error(err.message),
+      },
+    );
+  };
+
+  // ③ 削除
+  const handleDelete = (id: number) =&gt; {
+    deleteInterest.mutate(id, {
+      onSuccess: () =&gt; toast.success('キーワードを削除しました'),
+      onError: (err) =&gt; toast.error(err.message),
+    });
+  };
+
+  if (isLoading) {
+    return &lt;p className="text-sm text-muted-foreground"&gt;読み込み中...&lt;/p&gt;;
+  }
+
+  return (
+    &lt;div className="space-y-4"&gt;
+      {/* 新規作成フォーム（常に表示） */}
+      &lt;InterestForm
+        onSubmit={handleCreate}
+        isPending={createInterest.isPending}
+      /&gt;
+
+      {/* 一覧 */}
+      {interests &amp;&amp; interests.length &gt; 0 ? (
+        &lt;ul className="space-y-2"&gt;
+          {interests.map((interest) =&gt; (
+            &lt;li
+              key={interest.id}
+              className="flex items-center justify-between rounded-md border px-3 py-2"
+            &gt;
+              {editingId === interest.id ? (
+                {/* 編集モード: InterestFormを再利用 */}
+                &lt;InterestForm
+                  defaultValue={interest.keyword}
+                  onSubmit={(keyword) =&gt; handleUpdate(interest.id, keyword)}
+                  onCancel={() =&gt; setEditingId(null)}
+                  isPending={updateInterest.isPending}
+                  submitLabel="更新"
+                /&gt;
+              ) : (
+                {/* 表示モード: キーワード + 編集/削除ボタン */}
+                &lt;&gt;
+                  &lt;span className="text-sm"&gt;{interest.keyword}&lt;/span&gt;
+                  &lt;div className="flex gap-1"&gt;
+                    &lt;Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =&gt; setEditingId(interest.id)}
+                    &gt;
+                      &lt;Pencil className="h-4 w-4" /&gt;
+                    &lt;/Button&gt;
+                    &lt;Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =&gt; handleDelete(interest.id)}
+                      disabled={deleteInterest.isPending}
+                    &gt;
+                      &lt;Trash2 className="h-4 w-4 text-destructive" /&gt;
+                    &lt;/Button&gt;
+                  &lt;/div&gt;
+                &lt;/&gt;
+              )}
+            &lt;/li&gt;
+          ))}
+        &lt;/ul&gt;
+      ) : (
+        &lt;p className="text-sm text-muted-foreground"&gt;
+          まだキーワードが登録されていません。上のフォームから追加してください。
+        &lt;/p&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+    <h3>コード解説</h3>
+
+    <div class="why-box">
+      <strong><code>editingId</code> による表示/編集モードの切り替え:</strong><br>
+      <code>useState&lt;number | null&gt;(null)</code> で「どのInterestが編集中か」を管理する。
+      <ul style="margin-top:0.5rem">
+        <li><code>editingId === null</code> → 全てのアイテムが表示モード</li>
+        <li><code>editingId === 3</code> → id:3 のアイテムだけが編集フォームに切り替わる</li>
+        <li>更新成功時やキャンセル時に <code>setEditingId(null)</code> で表示モードに戻す</li>
+      </ul>
+    </div>
+
+    <div class="why-box">
+      <strong><code>toast</code> によるフィードバック:</strong><br>
+      <code>sonner</code> ライブラリの <code>toast.success()</code> / <code>toast.error()</code> でユーザーに操作結果を通知する。<code>mutate</code> の第2引数でコールバックを渡すパターンは、コンポーネント側でUI反応（toast、モード解除など）を制御したいときに使う。
+    </div>
+
+    <div class="why-box">
+      <strong>InterestForm の再利用パターン:</strong><br>
+      同じ <code>InterestForm</code> コンポーネントが2回使われている:
+      <ul style="margin-top:0.5rem">
+        <li><strong>上部:</strong> 新規作成用 — <code>defaultValue</code> なし、<code>onCancel</code> なし</li>
+        <li><strong>一覧内:</strong> 編集用 — <code>defaultValue={interest.keyword}</code>、<code>onCancel</code> あり</li>
+      </ul>
+      Propsの違いだけでフォームの振る舞いが変わる。同じUIを2つ書くのではなく、Propsで制御するのがReactコンポーネント設計の基本。
+    </div>
+
+    <h2>3-9. フロントエンド: DashboardPage への統合 <span class="section-tag tag-react">React</span></h2>
+
+    <p>作成したコンポーネントを Dashboard に組み込む。</p>
+
+    <div class="file-label">frontend/src/pages/DashboardPage.tsx（変更部分）</div>
+    <pre><code>import { InterestList } from '@/components/interests/InterestList';
+
+// ... 既存コード ...
+
+&lt;Card&gt;
+  &lt;CardHeader&gt;
+    &lt;CardTitle className="text-base"&gt;興味・関心キーワード&lt;/CardTitle&gt;
+  &lt;/CardHeader&gt;
+  &lt;CardContent&gt;
+    &lt;InterestList /&gt;   {/* ← プレースホルダーをコンポーネントに置換 */}
+  &lt;/CardContent&gt;
+&lt;/Card&gt;</code></pre>
+
+    <div class="why-box">
+      <code>&lt;InterestList /&gt;</code> を置くだけでCRUD機能が動く理由: コンポーネント内部で <code>useInterests</code>（データ取得）と各 <code>useMutation</code>（データ変更）を呼んでおり、TanStack Queryが全てのサーバー状態を管理しているため。親コンポーネント（DashboardPage）はInterestのデータを一切知らなくていい。
+    </div>
+
+    <h2>3-10. ファイル構成まとめ</h2>
+
+    <pre><code>frontend/src/
+├── types/
+│   ├── user.ts              # User型
+│   └── interest.ts          # Interest型
+├── hooks/
+│   ├── useAuth.ts           # 認証フック（Step 2）
+│   └── useInterests.ts      # Interest CRUDフック ← 今回追加
+├── components/
+│   ├── auth/
+│   │   └── AuthGuard.tsx    # 認証ガード（Step 2）
+│   └── interests/
+│       ├── InterestForm.tsx  # 入力フォーム ← 今回追加
+│       └── InterestList.tsx  # 一覧 + CRUD ← 今回追加
+└── pages/
+    ├── SignInPage.tsx        # ログイン（Step 2）
+    ├── SignUpPage.tsx        # 新規登録（Step 2）
+    └── DashboardPage.tsx     # ダッシュボード ← InterestList統合</code></pre>
+
+    <h2>3-11. 動作確認チェックリスト</h2>
+
+    <h3>バックエンド</h3>
     <ol>
-      <li>Interest作成 → 一覧に即反映される</li>
+      <li><code>bundle exec rspec spec/requests/api/v1/interests_spec.rb</code> が全てグリーン</li>
       <li>20文字超のキーワード → バリデーションエラーが返る</li>
       <li>重複キーワード → エラーメッセージが表示される</li>
       <li>他ユーザーのInterest → 404が返る（取得も更新も削除もできない）</li>
       <li>未認証 → 401が返る</li>
+    </ol>
+
+    <h3>フロントエンド</h3>
+    <ol>
+      <li>ダッシュボードに「興味・関心キーワード」カードが表示される</li>
+      <li>キーワードを入力して「登録」→ 一覧に即反映される</li>
+      <li>鉛筆アイコンでインライン編集 → 「更新」で反映、「キャンセル」で元に戻る</li>
+      <li>ゴミ箱アイコンで削除 → 一覧から即削除される</li>
+      <li>空欄のまま「登録」→ バリデーションエラーが表示される</li>
+      <li>操作成功時にtoast通知が表示される</li>
     </ol>
 
     <div class="nav-footer">
