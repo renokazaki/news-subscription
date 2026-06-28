@@ -96,6 +96,10 @@ gem 'devise-jwt'</code></pre>
 
     <pre><code>bundle install</code></pre>
 
+    <div class="warn-box">
+      <code>devise-jwt</code> は <code>DEVISE_JWT_SECRET_KEY</code> 環境変数を必要とする。Step 1で <code>dotenv-rails</code> を導入済みであること、<code>.env</code> に秘密鍵が設定済みであることを確認する。未設定だと <code>rails generate devise:install</code> 含む全てのrailsコマンドが <code>KeyError</code> で失敗する。
+    </div>
+
     <div class="why-box">
       <strong>devise-jwt</strong> はDeviseにJWT認証を統合するgem。ログイン成功時に自動でJWTトークンを生成し、<code>Authorization</code> ヘッダーに載せてレスポンスを返す。以降のリクエストでは同ヘッダーのトークンを検証してユーザーを特定する。<br><br>
       Deviseの認証ロジック（パスワードハッシュ・バリデーション・モジュール管理）はそのまま活用し、セッション管理だけをJWTに置き換える仕組み。
@@ -108,20 +112,28 @@ gem 'devise-jwt'</code></pre>
     <h3>Devise設定の調整</h3>
 
     <div class="file-label">backend/config/initializers/devise.rb（変更箇所のみ）</div>
-    <pre><code># API-onlyなのでHTMLナビゲーションを無効化
-config.navigational_formats = []
+    <pre><code>Devise.setup do |config|
+  # ... 既存の設定 ...
 
-# JWT設定
-config.jwt do |jwt|
-  jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY')
-  jwt.dispatch_requests = [
-    ['POST', %r{^/api/v1/auth/sign_in$}]
-  ]
-  jwt.revocation_requests = [
-    ['DELETE', %r{^/api/v1/auth/sign_out$}]
-  ]
-  jwt.expiration_time = 24.hours.to_i
-end</code></pre>
+  # API-onlyなのでHTMLナビゲーションを無効化
+  config.navigational_formats = []
+
+  # JWT設定
+  config.jwt do |jwt|
+    jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY')
+    jwt.dispatch_requests = [
+      ['POST', %r{^/api/v1/auth/sign_in$}]
+    ]
+    jwt.revocation_requests = [
+      ['DELETE', %r{^/api/v1/auth/sign_out$}]
+    ]
+    jwt.expiration_time = 24.hours.to_i
+  end  # ← config.jwt の end
+end    # ← Devise.setup の end</code></pre>
+
+    <div class="warn-box">
+      <code>config.jwt do |jwt| ... end</code> は <code>Devise.setup do |config| ... end</code> の中にネストする。<code>end</code> が2つ必要。<code>config.jwt</code> ブロックの <code>end</code> を忘れると <code>SyntaxError: unexpected end-of-input</code> になる。
+    </div>
 
     <div class="why-box">
       <strong><code>navigational_formats = []</code></strong> — デフォルトでは認証失敗時にHTMLリダイレクトしようとする。API-onlyでは常にJSONレスポンスを返したいので、空配列にしてリダイレクトを無効化する。これがないと401の代わりに302リダイレクトが返ってしまう。
@@ -192,7 +204,12 @@ end</code></pre>
       <code>exp</code> を保存する理由: トークンの有効期限が過ぎたdenylistレコードは不要なので、定期的にクリーンアップできるようにする。
     </div>
 
-    <pre><code>rails db:migrate</code></pre>
+    <pre><code>rails db:migrate
+rails db:migrate RAILS_ENV=test</code></pre>
+
+    <div class="warn-box">
+      テスト用DBにもマイグレーションが必要。<code>RAILS_ENV=test</code> を忘れると、RSpec実行時に <code>ActiveRecord::PendingMigrationError</code> が発生する。
+    </div>
 
     <h3>モデルの実装</h3>
 
@@ -244,9 +261,8 @@ end</code></pre>
     return render_unauthorized unless token
 
     begin
-      # devise-jwt がトークンをデコードし、ユーザーを特定
       @current_user = Warden::JWTAuth::UserDecoder.new.call(token, :user, nil)
-    rescue JWT::DecodeError, JWT::ExpiredSignature
+    rescue JWT::DecodeError, JWT::ExpiredSignature, Warden::JWTAuth::Errors::RevokedToken, NoMethodError
       render_unauthorized
     end
   end
@@ -322,7 +338,7 @@ end</code></pre>
   module V1
     module Auth
       class SessionsController &lt; ApplicationController
-        skip_before_action :authenticate_user!, only: [:create]
+        skip_before_action :authenticate_user!, only: [:create, :destroy]
 
         def create
           user = User.find_by(email: params[:user][:email])
@@ -383,6 +399,8 @@ end</code></pre>
 
     <div class="file-label">backend/config/routes.rb</div>
     <pre><code>Rails.application.routes.draw do
+  devise_for :users, skip: :all
+
   namespace :api do
     namespace :v1 do
       get 'health', to: 'health#show'
@@ -397,6 +415,10 @@ end</code></pre>
     end
   end
 end</code></pre>
+
+    <div class="why-box">
+      <strong><code>devise_for :users, skip: :all</code></strong> — Deviseのデフォルトルート（/users/sign_in等）は生成せず、Wardenにuserスコープのマッピングだけ登録する。これがないとWardenのJWTミドルウェアがトークン処理時にUserモデルを解決できず <code>NoMethodError: undefined method 'find_for_jwt_authentication' for nil</code> が発生する。ルーティングは自前で <code>namespace :auth</code> 内に定義する。
+    </div>
 
     <h3>ユーザー情報取得エンドポイント</h3>
 
@@ -455,7 +477,7 @@ RSpec.describe 'Api::V1::Auth::Registrations', type: :request do
              params: { user: { email: '', password: '' } },
              as: :json
 
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_content)
       end
     end
   end
@@ -614,11 +636,189 @@ export async function api&lt;T&gt;(path: string, options: RequestInit = {}): Pro
       JWTの管理はシンプル: ログイン成功時にレスポンスの <code>token</code> を <code>localStorage</code> に保存し、以降のリクエストで <code>Authorization: Bearer ...</code> ヘッダーに付与するだけ。カスタムトークン方式と異なり、複数のヘッダー（access-token, client, uid等）を管理する必要がない。
     </div>
 
-    <h2>2-8. フロントエンド: AuthContext & AuthGuard <span class="section-tag tag-react">React</span></h2>
+    <!-- ==================== TanStack Query ==================== -->
+    <h2>2-8. TanStack Query 入門 <span class="section-tag tag-react">React</span></h2>
+
+    <p>次のセクションで <code>useAuth.ts</code> を実装するが、そこで使う <strong>TanStack Query</strong>（旧 React Query）の基本を先に理解しておこう。</p>
+
+    <h3>そもそも何を解決するライブラリ？</h3>
+
+    <p>Reactでは、APIからデータを取得するとき通常こう書く:</p>
+
+    <pre><code>// ❌ useEffect + useState パターン（よくあるが問題が多い）
+const [user, setUser] = useState(null);
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState(null);
+
+useEffect(() =&gt; {
+  fetch('/api/v1/user')
+    .then(res =&gt; res.json())
+    .then(data =&gt; setUser(data))
+    .catch(err =&gt; setError(err))
+    .finally(() =&gt; setLoading(false));
+}, []);</code></pre>
+
+    <p>これは動くが、以下の問題がある:</p>
+    <ul>
+      <li><strong>キャッシュがない</strong> — ページ遷移のたびに同じAPIを何度も叩く</li>
+      <li><strong>状態管理が冗長</strong> — <code>loading</code>, <code>error</code>, <code>data</code> を毎回3つのstateで管理する</li>
+      <li><strong>再取得の仕組みがない</strong> — ログイン後にユーザー情報を更新したいとき、手動で <code>setUser</code> するか、<code>useEffect</code> の依存配列をハックする必要がある</li>
+      <li><strong>複数コンポーネント間で共有できない</strong> — 別のコンポーネントでも同じユーザー情報が必要なとき、またfetchするか、Context/propsバケツリレーが必要</li>
+    </ul>
+
+    <p><strong>TanStack Query はこれらを全て解決する。</strong> 「サーバーの状態（API応答）をクライアントで管理する」ための専用ライブラリ。</p>
+
+    <h3>中心概念: useQuery（データ取得）</h3>
+
+    <pre><code>import { useQuery } from '@tanstack/react-query';
+
+// ✅ TanStack Query パターン
+const { data: user, isLoading, isError, error } = useQuery({
+  queryKey: ['currentUser'],       // ① キャッシュのキー
+  queryFn: () =&gt; api('/user'),     // ② データを取得する関数
+  staleTime: 5 * 60 * 1000,        // ③ 5分間はキャッシュを「新鮮」とみなす
+});</code></pre>
+
+    <div class="why-box">
+      <strong>3つの引数の意味:</strong>
+      <ul style="margin-top:0.5rem">
+        <li><strong><code>queryKey</code></strong> — キャッシュの「住所」。同じkeyを使う全コンポーネントが同じデータを共有する。<code>['currentUser']</code> というkeyを使えば、Header、Dashboard、Profile のどこでも同じユーザー情報が参照できる（再fetchしない）</li>
+        <li><strong><code>queryFn</code></strong> — 実際にAPIを呼ぶ関数。fetchやaxiosのラッパー。返り値がキャッシュに格納される</li>
+        <li><strong><code>staleTime</code></strong> — キャッシュの有効期間。この時間内は再fetchせずキャッシュを返す。0（デフォルト）だと毎回APIを叩くので、適切な値を設定する</li>
+      </ul>
+    </div>
+
+    <h3>中心概念: useMutation（データ変更）</h3>
+
+    <p><code>useQuery</code> が「読み取り」なら、<code>useMutation</code> は「書き込み」。ログイン、サインアップ、ログアウトなどのPOST/PUT/DELETEリクエストに使う。</p>
+
+    <pre><code>import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+const queryClient = useQueryClient();
+
+const signIn = useMutation({
+  // ① 実行する非同期処理
+  mutationFn: async ({ email, password }) =&gt; {
+    const res = await api('/auth/sign_in', {
+      method: 'POST',
+      body: JSON.stringify({ user: { email, password } }),
+    });
+    setToken(res.token);
+    return res.user;
+  },
+  // ② 成功時のコールバック
+  onSuccess: () =&gt; {
+    queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+  },
+});
+
+// コンポーネントで使う
+signIn.mutate({ email: 'test@example.com', password: 'password123' });</code></pre>
+
+    <div class="why-box">
+      <strong><code>useMutation</code> の使い方:</strong>
+      <ul style="margin-top:0.5rem">
+        <li><strong><code>mutationFn</code></strong> — ボタンクリック等で実行される非同期処理。<code>useQuery</code> と違い、自動実行されない。<code>mutate()</code> を呼んだときだけ実行される</li>
+        <li><strong><code>onSuccess</code></strong> — 成功時に呼ばれるコールバック。ここでキャッシュを更新する</li>
+        <li><strong><code>signIn.isPending</code></strong> — 通信中かどうか。ボタンのdisabled制御に使う</li>
+        <li><strong><code>signIn.isError</code></strong> / <strong><code>signIn.error</code></strong> — エラー状態とエラー内容</li>
+      </ul>
+    </div>
+
+    <h3>最重要概念: invalidateQueries（キャッシュ無効化）</h3>
+
+    <p>TanStack Queryで最も理解すべきメカニズムが <strong>キャッシュの無効化</strong>。</p>
+
+    <div class="flow-diagram">
+【ログイン時の流れ】
+
+  ① signIn.mutate()
+     └→ POST /api/v1/auth/sign_in
+     └→ 成功 → JWTをlocalStorageに保存
+
+  ② onSuccess コールバック
+     └→ queryClient.invalidateQueries({ queryKey: ['currentUser'] })
+         │
+         │  「'currentUser' のキャッシュはもう古い」と宣言
+         │
+         └→ useQuery({ queryKey: ['currentUser'] }) が自動で再fetch
+            └→ GET /api/v1/user (今度はJWT付き → ユーザー情報が返る)
+
+  ③ AuthGuard が再レンダリング
+     └→ user が取得できた → &lt;Outlet /&gt; → Dashboard表示</div>
+
+    <div class="why-box">
+      <strong>なぜ直接 <code>setUser(data)</code> しないのか？</strong><br>
+      <code>invalidateQueries</code> を使うと、<code>['currentUser']</code> を参照している <strong>全てのコンポーネント</strong> が自動で最新データに更新される。手動の <code>setState</code> だと、更新を呼んだコンポーネントしか変わらない。アプリが大きくなるほどこの差が効いてくる。
+    </div>
+
+    <h3>QueryClientProvider: アプリ全体のセットアップ</h3>
+
+    <p><code>useQuery</code> や <code>useMutation</code> を使うには、アプリのルートに <code>QueryClientProvider</code> を配置する必要がある:</p>
+
+    <div class="file-label">frontend/src/App.tsx（QueryClient設定部分）</div>
+    <pre><code>import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,               // 失敗時に自動リトライしない（401で何度もリトライされると困る）
+      refetchOnWindowFocus: false, // タブ切り替え時に自動再fetchしない
+    },
+  },
+});
+
+function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      {/* この中でuseQuery/useMutationが使える */}
+      &lt;BrowserRouter&gt;
+        &lt;Routes&gt;...&lt;/Routes&gt;
+      &lt;/BrowserRouter&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}</code></pre>
+
+    <div class="why-box">
+      <strong><code>QueryClient</code></strong> はアプリ全体のキャッシュストア。全ての <code>useQuery</code> のデータがここに集約される。Reactの <code>Context</code> を使って子コンポーネントに配布されるので、<code>Provider</code> で囲む必要がある。<br><br>
+      <strong><code>retry: false</code></strong> — デフォルトだと失敗時に3回リトライする。認証エラー（401）で3回リトライされるとUXが悪いので無効にしている。
+    </div>
+
+    <h3>useQuery vs useMutation 早見表</h3>
+
+    <pre><code>┌─────────────────┬─────────────────────────┬─────────────────────────┐
+│                 │ useQuery                │ useMutation             │
+├─────────────────┼─────────────────────────┼─────────────────────────┤
+│ 用途            │ データ取得（GET）        │ データ変更（POST等）    │
+│ 実行タイミング  │ コンポーネント表示時     │ mutate() を呼んだ時     │
+│ 自動再実行      │ あり（invalidate時等）   │ なし                    │
+│ キャッシュ      │ queryKeyで自動管理       │ なし                    │
+│ 戻り値          │ data, isLoading, isError │ mutate, isPending,      │
+│                 │                         │ isError, error          │
+│ このアプリでの例│ useCurrentUser()        │ useSignIn()             │
+│                 │ → GET /user             │ → POST /auth/sign_in    │
+└─────────────────┴─────────────────────────┴─────────────────────────┘</code></pre>
+
+    <div class="tip-box">
+      TanStack Queryは「サーバー状態管理」ライブラリであり、フォームの入力値やUIの開閉状態といった「クライアント状態」の管理には使わない。クライアント状態にはこのプロジェクトでは <code>jotai</code>（軽量な状態管理ライブラリ）を使用する予定。この使い分けが重要：サーバーから来るデータ → TanStack Query、クライアントだけで完結する状態 → jotai / useState。
+    </div>
+
+    <h2>2-9. フロントエンド: useAuth & AuthGuard <span class="section-tag tag-react">React</span></h2>
+
+    <p>TanStack Queryの概念を踏まえて、認証用のカスタムフックとルートガードを実装する。</p>
+
+    <div class="file-label">frontend/src/types/user.ts</div>
+    <pre><code>export type User = {
+  id: number;
+  email: string;
+  display_name: string;
+  profile_image: string | null;
+};</code></pre>
 
     <div class="file-label">frontend/src/hooks/useAuth.ts</div>
     <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, setToken, clearToken } from '../lib/api';
+import { api, setToken, clearToken } from '@/lib/api';
+import type { User } from '@/types/user';
 
 export const useCurrentUser = () =&gt; {
   return useQuery({
@@ -674,24 +874,41 @@ export const useSignOut = () =&gt; {
   });
 };</code></pre>
 
-    <div class="file-label">frontend/src/components/auth/AuthGuard.tsx（ポイント）</div>
+    <div class="file-label">frontend/src/components/auth/AuthGuard.tsx</div>
     <pre><code>import { Outlet, Navigate } from 'react-router';
-import { useCurrentUser } from '../../hooks/useAuth';
+import { useCurrentUser } from '@/hooks/useAuth';
 
 export function AuthGuard() {
   const { data: user, isLoading, isError } = useCurrentUser();
 
-  if (isLoading) return &lt;LoadingSpinner /&gt;;
+  if (isLoading) {
+    return (
+      &lt;div className="flex h-screen items-center justify-center"&gt;
+        &lt;div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /&gt;
+      &lt;/div&gt;
+    );
+  }
+
   if (isError || !user) return &lt;Navigate to="/sign-in" replace /&gt;;
 
   return &lt;Outlet /&gt;;
 }</code></pre>
 
+    <div class="why-box">
+      <strong>AuthGuard の TanStack Query 活用ポイント:</strong>
+      <ul style="margin-top:0.5rem">
+        <li><code>useCurrentUser()</code> は内部で <code>useQuery</code> を使っている。マウント時に <code>GET /user</code> を実行し、JWTが有効ならユーザー情報が返る</li>
+        <li><code>isLoading</code> 中はスピナーを表示 — API応答が来る前にリダイレクトしないようにする</li>
+        <li><code>isError</code>（401等）ならログインページにリダイレクト</li>
+        <li>ログイン後に <code>invalidateQueries(['currentUser'])</code> が呼ばれると、AuthGuardの <code>useCurrentUser</code> が自動で再fetch → ユーザー情報取得 → Dashboard表示、という流れになる</li>
+      </ul>
+    </div>
+
     <div class="tip-box">
       <code>queryClient.clear()</code> をログアウト時に呼ぶ理由: キャッシュに前のユーザーのデータ（Interest一覧やニュース）が残っていると、別ユーザーでログインした時に古いデータが一瞬見えてしまう。全キャッシュをクリアすることで確実に防ぐ。
     </div>
 
-    <h2>2-9. 動作確認チェックリスト</h2>
+    <h2>2-10. 動作確認チェックリスト</h2>
     <ol>
       <li>サインアップ → JWTがレスポンスに含まれ、localStorageに保存される</li>
       <li>ログイン → 新しいJWTでlocalStorageが更新される</li>
