@@ -2,6 +2,7 @@ import { useNavigate } from "react-router";
 import { useCurrentUser, useSignOut } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InterestList } from "@/components/interests/InterestList";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export function DashboardPage() {
       <main className="mx-auto max-w-4xl px-4 py-8">
         <h2 className="mb-6 text-2xl font-bold">ダッシュボード</h2>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">プロフィール</CardTitle>
@@ -57,12 +58,10 @@ export function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">興味・関心</CardTitle>
+              <CardTitle className="text-base">興味・関心キーワード</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Step 3 で Interest CRUD を実装すると、ここに表示されます。
-              </p>
+              <InterestList />
             </CardContent>
           </Card>
         </div>
