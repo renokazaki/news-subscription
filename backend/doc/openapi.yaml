@@ -1,0 +1,192 @@
+---
+openapi: 3.0.3
+info:
+  title: News Subscription API
+  version: 1.0.0
+  description: News Subscription REST API specification
+servers: []
+paths:
+  "/api/v1/auth/sign_in":
+    post:
+      summary: create
+      tags:
+      - Api::V1::Auth::Session
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                    password:
+                      type: string
+                  required:
+                  - email
+                  - password
+              required:
+              - user
+            example:
+              user:
+                email: test@example.com
+                password: password123
+      responses:
+        '200':
+          description: returns JWT token on successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      display_name:
+                        type: string
+                      profile_image:
+                        nullable: true
+                    required:
+                    - id
+                    - email
+                    - display_name
+                    - profile_image
+                  token:
+                    type: string
+                required:
+                - user
+                - token
+              example:
+                user:
+                  id: 16
+                  email: test@example.com
+                  display_name: Elane Lesch III
+                  profile_image:
+                token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxNiIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4MjY0NjEyNCwiZXhwIjoxNzgyNzMyNTI0LCJqdGkiOiIwNjFmOGE5My0wMDgyLTQ3ZGYtOGQ4ZC1jYTcxZDdjMTA1OTcifQ.2QrybcJCF13Bo5sqcjNv75BZ6rLkHK8UeLvzwZrIkqE
+        '401':
+          description: returns 401 on invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                required:
+                - error
+              example:
+                error: Invalid email or password
+  "/api/v1/auth/sign_up":
+    post:
+      summary: create
+      tags:
+      - Api::V1::Auth::Registration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                    password:
+                      type: string
+                    password_confirmation:
+                      type: string
+                    display_name:
+                      type: string
+                  required:
+                  - email
+                  - password
+                  - password_confirmation
+                  - display_name
+              required:
+              - user
+            example:
+              user:
+                email: new@example.com
+                password: password123
+                password_confirmation: password123
+                display_name: New User
+      responses:
+        '201':
+          description: creates a new user and returns JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      display_name:
+                        type: string
+                      profile_image:
+                        nullable: true
+                    required:
+                    - id
+                    - email
+                    - display_name
+                    - profile_image
+                  token:
+                    type: string
+                required:
+                - user
+                - token
+              example:
+                user:
+                  id: 15
+                  email: new@example.com
+                  display_name: New User
+                  profile_image:
+                token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxNSIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4MjY0NjEyMywiZXhwIjoxNzgyNzMyNTIzLCJqdGkiOiJkZThhYjI5Yy1iYzJiLTQ4YzQtYmFjNi02MDdmNzQ5N2M1MDMifQ.QxaWHH6F2aa9aASYZOuAuD2k3jpFNCc4RkbVNKTanOk
+        '422':
+          description: returns validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                required:
+                - errors
+              example:
+                errors:
+                - Email can't be blank
+                - Password can't be blank
+                - Display name can't be blank
+  "/api/v1/user":
+    get:
+      summary: show
+      tags:
+      - Api::V1::User
+      responses:
+        '401':
+          description: invalidates the JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                required:
+                - error
+              example:
+                error: Unauthorized
