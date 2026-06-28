@@ -49,12 +49,12 @@ export interface paths {
                         /**
                          * @example {
                          *       "user": {
-                         *         "id": 20,
+                         *         "id": 28,
                          *         "email": "test@example.com",
-                         *         "display_name": "Gordon Daugherty",
+                         *         "display_name": "Luetta Kassulke",
                          *         "profile_image": null
                          *       },
-                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyMCIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4MjY1NTQyOCwiZXhwIjoxNzgyNzQxODI4LCJqdGkiOiJlYTdmMDJhNi0wY2QwLTQwOTMtODNjNS05Mzg2OWNlNDcyNTgifQ.cnpOYTffD9CQNWiW3Hbb_6xFoY74K7H03sIKjncuAJY"
+                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyOCIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4MjY1ODM2NiwiZXhwIjoxNzgyNzQ0NzY2LCJqdGkiOiI3NmJhMmVhNy0yYWE4LTQ0NWItODc3My0zM2UwNjNlYTZhNzEifQ.QTaoQTTVsrO5Oes_nWpI9-zLtTSc0quG-_CICZydFUo"
                          *     }
                          */
                         "application/json": {
@@ -87,6 +87,49 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sign_out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** destroy */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description logs out successfully */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        /**
+                         * @example {
+                         *       "message": "Logged out successfully"
+                         *     }
+                         */
+                        "application/json": {
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -141,12 +184,12 @@ export interface paths {
                         /**
                          * @example {
                          *       "user": {
-                         *         "id": 19,
+                         *         "id": 27,
                          *         "email": "new@example.com",
                          *         "display_name": "New User",
                          *         "profile_image": null
                          *       },
-                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxOSIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4MjY1NTQyNiwiZXhwIjoxNzgyNzQxODI2LCJqdGkiOiIxYzhlMTU1NS1jYjU2LTQ0YWEtYjEyYi1mNjk3MWFjMmZmOTcifQ.JIF1PzOWu_Kg4vp-uPDz5A5mzDqa7CBVFuPpVZeFeIQ"
+                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyNyIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4MjY1ODM2NSwiZXhwIjoxNzgyNzQ0NzY1LCJqdGkiOiIwNzQ4M2I5Yi02ZjYwLTRlODgtYTA1OC1lMDA4NjUwMDZiNjcifQ.1be3MMwGYBJwKFjtAmJ0MuH5ksicpeYWY4jF4Gvd-S8"
                          *     }
                          */
                         "application/json": {
@@ -214,14 +257,14 @@ export interface paths {
                         /**
                          * @example [
                          *       {
-                         *         "id": 2,
+                         *         "id": 7,
                          *         "keyword": "Rails",
-                         *         "created_at": "2026-06-28T14:03:48.487Z"
+                         *         "created_at": "2026-06-28T14:52:47.130Z"
                          *       },
                          *       {
-                         *         "id": 1,
+                         *         "id": 6,
                          *         "keyword": "React",
-                         *         "created_at": "2026-06-28T14:03:48.466Z"
+                         *         "created_at": "2026-06-28T14:52:47.116Z"
                          *       }
                          *     ]
                          */
@@ -268,9 +311,9 @@ export interface paths {
                     content: {
                         /**
                          * @example {
-                         *       "id": 3,
+                         *       "id": 8,
                          *       "keyword": "TypeScript",
-                         *       "created_at": "2026-06-28T14:03:48.831Z"
+                         *       "created_at": "2026-06-28T14:52:47.211Z"
                          *     }
                          */
                         "application/json": {
@@ -304,7 +347,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @example 5 */
+                    /** @example 10 */
                     id: number;
                 };
                 cookie?: never;
@@ -328,7 +371,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @example 4 */
+                    /** @example 9 */
                     id: number;
                 };
                 cookie?: never;
@@ -358,9 +401,9 @@ export interface paths {
                     content: {
                         /**
                          * @example {
-                         *       "id": 4,
+                         *       "id": 9,
                          *       "keyword": "Vue",
-                         *       "created_at": "2026-06-28T14:03:48.872Z"
+                         *       "created_at": "2026-06-28T14:52:47.253Z"
                          *     }
                          */
                         "application/json": {
@@ -391,20 +434,36 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description invalidates the JWT token */
-                401: {
+                /** @description returns the current user */
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         /**
                          * @example {
-                         *       "error": "Unauthorized"
+                         *       "id": 35,
+                         *       "email": "halina_cassin@lehner-mraz.example",
+                         *       "display_name": "Lizabeth Emmerich Esq.",
+                         *       "profile_image": null
                          *     }
                          */
                         "application/json": {
-                            error: string;
+                            id: number;
+                            email: string;
+                            display_name: string;
+                            profile_image: unknown;
                         };
+                    };
+                };
+                /** @description invalidates the JWT token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        /** @example {} */
+                        "application/json": Record<string, never>;
                     };
                 };
             };

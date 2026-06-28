@@ -15,7 +15,7 @@ export function SignInPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     signIn.mutate(
-      { email, password },
+      { body: { user: { email, password } } },
       { onSuccess: () => navigate("/dashboard", { replace: true }) },
     );
   };

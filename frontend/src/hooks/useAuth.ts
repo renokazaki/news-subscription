@@ -1,11 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, setToken, clearToken } from "@/lib/api";
-import type { User } from "@/types/user";
+import { useQueryClient } from "@tanstack/react-query";
+import $api from "@/lib/$api";
+import { setToken, clearToken } from "@/lib/client";
 
 export const useCurrentUser = () => {
-  return useQuery({
-    queryKey: ["currentUser"],
-    queryFn: () => api<User>("/user"),
+  return $api.useQuery("get", "/api/v1/user", undefined, {
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -13,56 +11,30 @@ export const useCurrentUser = () => {
 
 export const useSignIn = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      email,
-      password,
-    }: {
-      email: string;
-      password: string;
-    }) => {
-      const res = await api<{ user: User; token: string }>("/auth/sign_in", {
-        method: "POST",
-        body: JSON.stringify({ user: { email, password } }),
-      });
-      setToken(res.token); // JWTをlocalStorageに保存
-      return res.user;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+  return $api.useMutation("post", "/api/v1/auth/sign_in", {
+    onSuccess: (data) => {
+      setToken(data.token);
+      queryClient.invalidateQueries({ queryKey: ["get", "/api/v1/user"] });
     },
   });
 };
 
 export const useSignUp = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (params: {
-      email: string;
-      password: string;
-      password_confirmation: string;
-      display_name: string;
-    }) => {
-      const res = await api<{ user: User; token: string }>("/auth/sign_up", {
-        method: "POST",
-        body: JSON.stringify({ user: params }),
-      });
-      setToken(res.token);
-      return res.user;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+  return $api.useMutation("post", "/api/v1/auth/sign_up", {
+    onSuccess: (data) => {
+      setToken(data.token);
+      queryClient.invalidateQueries({ queryKey: ["get", "/api/v1/user"] });
     },
   });
 };
 
 export const useSignOut = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api("/auth/sign_out", { method: "DELETE" }),
+  return $api.useMutation("delete", "/api/v1/auth/sign_out", {
     onSuccess: () => {
       clearToken();
-      queryClient.clear(); // 全キャッシュクリア（認証済みデータを残さない）
+      queryClient.clear();
     },
   });
 };

@@ -37,6 +37,19 @@
     .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
     .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
     .flow-diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8rem; line-height: 1.6; font-family: 'JetBrains Mono', 'Fira Code', monospace; white-space: pre; color: var(--text-muted); }
+    .pattern-tabs { display: flex; gap: 0; margin-top: 1.5rem; }
+    .pattern-tab { padding: 0.5rem 1.25rem; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: none; border-radius: 0.5rem 0.5rem 0 0; transition: all 0.2s; }
+    .pattern-tab:hover { background: var(--surface-hover); }
+    .pattern-tab.active { background: var(--code-bg); color: var(--accent); border-color: var(--accent); border-bottom: 1px solid var(--code-bg); position: relative; z-index: 1; }
+    .pattern-tab.tab-manual { border-color: var(--yellow); }
+    .pattern-tab.tab-manual.active { color: var(--yellow); border-color: var(--yellow); }
+    .pattern-tab.tab-openapi { border-color: var(--accent); }
+    .pattern-tab.tab-openapi.active { color: var(--accent); border-color: var(--accent); }
+    .pattern-content { border: 1px solid var(--border); border-radius: 0 0.5rem 0.5rem 0.5rem; padding: 1.5rem; margin-top: -1px; background: var(--code-bg); display: none; }
+    .pattern-content.active { display: block; }
+    .pattern-label { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-bottom: 0.75rem; }
+    .pattern-label.label-manual { background: rgba(251, 191, 36, 0.1); color: var(--yellow); border: 1px solid rgba(251, 191, 36, 0.2); }
+    .pattern-label.label-openapi { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
   </style>
 </head>
 <body>
@@ -285,35 +298,273 @@ curl -X DELETE http://localhost:3000/api/v1/interests/1 \
 # => 204 No Content</code></pre>
 
     <!-- ==================== Frontend ==================== -->
-    <h2>3-5. フロントエンド: Interest 型定義 <span class="section-tag tag-react">React</span></h2>
+    <h2>3-5. フロントエンド: 2つのパターン概要 <span class="section-tag tag-react">React</span></h2>
 
-    <p>まず、バックエンドのAPIレスポンスに合わせた型を定義する。</p>
+    <p>フロントエンドからAPIを呼ぶ方法は大きく2つある。このガイドでは<strong>両方のコード</strong>を並べて、違いを理解できるようにしている。</p>
 
-    <div class="file-label">frontend/src/types/interest.ts</div>
-    <pre><code>export type Interest = {
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>手動パターン</th>
+          <th>OpenAPIパターン</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>APIクライアント</strong></td>
+          <td>自作の <code>api()</code> fetchヘルパー</td>
+          <td><code>openapi-fetch</code> + <code>openapi-react-query</code></td>
+        </tr>
+        <tr>
+          <td><strong>型定義</strong></td>
+          <td>手書き（<code>types/interest.ts</code>）</td>
+          <td>OpenAPIスキーマから自動生成</td>
+        </tr>
+        <tr>
+          <td><strong>フック</strong></td>
+          <td><code>useQuery</code> / <code>useMutation</code> を直接使う</td>
+          <td><code>$api.useQuery</code> / <code>$api.useMutation</code></td>
+        </tr>
+        <tr>
+          <td><strong>パスの型安全性</strong></td>
+          <td>なし（文字列を間違えてもコンパイル通る）</td>
+          <td>あり（存在しないパスはコンパイルエラー）</td>
+        </tr>
+        <tr>
+          <td><strong>204 No Content</strong></td>
+          <td>自前で <code>response.status === 204</code> 判定が必要</td>
+          <td><code>openapi-fetch</code> が自動処理</td>
+        </tr>
+        <tr>
+          <td><strong>学習コスト</strong></td>
+          <td>低い（TanStack Queryの基本だけ）</td>
+          <td>やや高い（パイプライン構築が前提）</td>
+        </tr>
+        <tr>
+          <td><strong>向いている場面</strong></td>
+          <td>小規模・学習目的・外部APIとの接続</td>
+          <td>エンドポイントが多い本格アプリ</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tip-box">
+      以下のセクションでは、タブを切り替えて同じ機能の2パターンの実装を比較できる。TanStack Queryの基本を理解するには<strong>手動パターン</strong>を読み、実務で使う方法を知りたい場合は<strong>OpenAPIパターン</strong>を読む。
+    </div>
+
+    <!-- ===== 3-5a. APIクライアント ===== -->
+    <h2>3-5a. フロントエンド: APIクライアント <span class="section-tag tag-react">React</span></h2>
+
+    <div class="pattern-tabs" data-group="client">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('client', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('client', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="client" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+      <p>自分でfetchをラップしたヘルパー関数を作る。シンプルで理解しやすいが、パスの型チェックは効かない。</p>
+
+      <div class="file-label">frontend/src/lib/api.ts</div>
+      <pre><code>const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
+function getToken(): string | null {
+  return localStorage.getItem('auth-token');
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem('auth-token', token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem('auth-token');
+}
+
+export async function api&lt;T&gt;(
+  path: string,
+  options: RequestInit = {},
+): Promise&lt;T&gt; {
+  const token = getToken();
+  const headers: Record&lt;string, string&gt; = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record&lt;string, string&gt;),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  if (response.status === 401) {
+    clearToken();
+    window.location.href = '/sign-in';
+    throw new Error('Unauthorized');
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() =&gt; ({}));
+    throw new Error(
+      body.error || body.errors?.join(', ') || `API Error: ${response.status}`,
+    );
+  }
+
+  // 204 No Content はボディがないので json() を呼ばない
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json();
+}</code></pre>
+
+      <div class="warn-box">
+        <strong>204 No Content に注意:</strong> DELETEは <code>head :no_content</code>（ボディなし）を返す。<code>response.json()</code> を無条件に呼ぶと <code>Unexpected end of JSON input</code> エラーになるので、ステータス204の判定を入れる。
+      </div>
+    </div>
+
+    <div class="pattern-content" data-group="client" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+      <p><code>openapi-fetch</code> に生成済みの型（<code>paths</code>）を渡してクライアントを作る。パスの自動補完・型チェックが効く。204の処理も自動。</p>
+
+      <div class="file-label">frontend/src/lib/client.ts</div>
+      <pre><code>import createClient from 'openapi-fetch';
+import type { paths } from './api/v1';   // ← openapi-typescript で自動生成
+
+function getToken(): string | null {
+  return localStorage.getItem('auth-token');
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem('auth-token', token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem('auth-token');
+}
+
+// paths 型をジェネリクスに渡すことで、パスの自動補完が効く
+const client = createClient&lt;paths&gt;({
+  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+});
+
+// ミドルウェアで認証ヘッダー付与 + 401ハンドリング
+client.use({
+  async onRequest({ request }) {
+    const token = getToken();
+    if (token) {
+      request.headers.set('Authorization', `Bearer ${token}`);
+    }
+    return request;
+  },
+  async onResponse({ response }) {
+    if (response.status === 401) {
+      clearToken();
+      window.location.href = '/sign-in';
+    }
+    return response;
+  },
+});
+
+export default client;</code></pre>
+
+      <div class="file-label">frontend/src/lib/$api.ts</div>
+      <pre><code>import createQueryClient from 'openapi-react-query';
+import client from './client';
+
+// openapi-fetch クライアントを渡すだけで
+// $api.useQuery / $api.useMutation が使えるようになる
+const $api = createQueryClient(client);
+
+export default $api;</code></pre>
+
+      <div class="why-box">
+        手動パターンの <code>api()</code> ヘルパーでやっていた認証ヘッダー付与・401リダイレクト・204判定が、<code>openapi-fetch</code> のミドルウェアで宣言的に書ける。
+      </div>
+    </div>
+
+    <!-- ===== 3-5b. 型定義 ===== -->
+    <h2>3-5b. フロントエンド: Interest 型定義 <span class="section-tag tag-react">React</span></h2>
+
+    <div class="pattern-tabs" data-group="types">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('types', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('types', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="types" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+      <p>バックエンドのレスポンスに合わせて、自分で型を書く。</p>
+
+      <div class="file-label">frontend/src/types/interest.ts</div>
+      <pre><code>export type Interest = {
   id: number;
   keyword: string;
   created_at: string;
 };</code></pre>
 
-    <div class="why-box">
-      バックエンドの <code>interest_response</code> メソッドが返すJSONの形状と一致させる。TypeScriptの型を明示することで、フロントエンド全体でAPIレスポンスを安全に扱える。
+      <div class="warn-box">
+        バックエンドがフィールドを追加・変更しても、この型を手動で同期しないとフロントとの不整合が起きる。
+      </div>
     </div>
 
+    <div class="pattern-content" data-group="types" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+      <p>型定義ファイルは不要。<code>npm run generate:api</code> で <code>src/lib/api/v1.d.ts</code> に自動生成される。</p>
+
+      <pre><code># RSpecを実行してOpenAPIスキーマを更新
+cd backend && OPENAPI=1 bundle exec rspec
+
+# 型を再生成
+cd frontend && npm run generate:api</code></pre>
+
+      <p>生成された型（抜粋）:</p>
+
+      <div class="file-label">frontend/src/lib/api/v1.d.ts（自動生成）</div>
+      <pre><code>// GET /api/v1/interests の 200 レスポンス型が自動で含まれる
+"/api/v1/interests": {
+  get: {
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            id: number;
+            keyword: string;
+            created_at: string;
+          }[];
+        };
+      };
+    };
+  };
+  // POST, PATCH, DELETE も同様...
+}</code></pre>
+
+      <div class="why-box">
+        バックエンドが変わったら型を再生成するだけ。フロントで古い型を使っていたらTypeScriptコンパイラがエラーで教えてくれる。
+      </div>
+    </div>
+
+    <!-- ===== 3-6. useInterests フック ===== -->
     <h2>3-6. フロントエンド: useInterests フック <span class="section-tag tag-react">React</span></h2>
 
-    <p>Step 2 で学んだ TanStack Query のパターンを使い、Interest の CRUD 操作をカスタムフックにまとめる。</p>
+    <p>Interest の CRUD 操作をカスタムフックにまとめる。どちらのパターンでも TanStack Query の <code>useQuery</code> / <code>useMutation</code> の考え方は同じ。</p>
 
-    <div class="file-label">frontend/src/hooks/useInterests.ts</div>
-    <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    <div class="pattern-tabs" data-group="hooks">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('hooks', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('hooks', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="hooks" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+
+      <div class="file-label">frontend/src/hooks/useInterests.ts</div>
+      <pre><code>import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Interest } from '@/types/interest';
 
 // ① 一覧取得（useQuery）
 export const useInterests = () =&gt; {
   return useQuery({
-    queryKey: ['interests'],
-    queryFn: () =&gt; api&lt;Interest[]&gt;('/interests'),
+    queryKey: ['interests'],              // キャッシュのキー（自分で命名）
+    queryFn: () =&gt; api&lt;Interest[]&gt;('/interests'),  // 型は手動で指定
   });
 };
 
@@ -321,7 +572,7 @@ export const useInterests = () =&gt; {
 export const useCreateInterest = () =&gt; {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (keyword: string) =&gt;
+    mutationFn: (keyword: string) =&gt;       // 引数の型も自分で定義
       api&lt;Interest&gt;('/interests', {
         method: 'POST',
         body: JSON.stringify({ interest: { keyword } }),
@@ -359,46 +610,129 @@ export const useDeleteInterest = () =&gt; {
   });
 };</code></pre>
 
-    <div class="warn-box">
-      <strong>DELETE の 204 No Content に注意:</strong><br>
-      バックエンドの <code>destroy</code> アクションは <code>head :no_content</code>（ステータス204、ボディなし）を返す。<code>api()</code> ヘルパーで <code>response.json()</code> を無条件に呼ぶと、空ボディをパースしようとして <code>Unexpected end of JSON input</code> エラーになる。対策として <code>api.ts</code> に204判定を追加する:
-      <pre><code>  // 204 No Content はボディがないので json() を呼ばない
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json();</code></pre>
+      <div class="why-box">
+        <strong>TanStack Query の基本パターン（暗記用）:</strong>
+        <ul style="margin-top:0.5rem">
+          <li><strong>読み取り</strong> → <code>useQuery({ queryKey, queryFn })</code></li>
+          <li><strong>書き込み</strong> → <code>useMutation({ mutationFn, onSuccess: () =&gt; invalidateQueries() })</code></li>
+        </ul>
+        <code>invalidateQueries</code> = 「このqueryKeyのキャッシュは古くなったから再取得して」という指示。書き込み成功後に呼ぶことで、一覧が自動更新される。
+      </div>
     </div>
 
-    <div class="why-box">
-      <strong>4つのフックが同じパターンを繰り返している点に注目。</strong> TanStack Query での CRUD は以下の公式に当てはめるだけ:
-      <ul style="margin-top:0.5rem">
-        <li><strong>読み取り</strong> → <code>useQuery</code> + <code>queryKey</code> + <code>queryFn</code></li>
-        <li><strong>書き込み</strong> → <code>useMutation</code> + <code>mutationFn</code> + <code>onSuccess: invalidateQueries</code></li>
-      </ul>
-      <code>invalidateQueries({ queryKey: ['interests'] })</code> が全ての書き込みフックに入っている理由: 作成・更新・削除のいずれかが成功したら、一覧のキャッシュを無効化 → 自動で <code>GET /interests</code> が再実行 → UIに最新の一覧が表示される。
+    <div class="pattern-content" data-group="hooks" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+
+      <div class="file-label">frontend/src/hooks/useInterests.ts</div>
+      <pre><code>import { useQueryClient } from '@tanstack/react-query';
+import $api from '@/lib/$api';
+
+// queryKey は $api が自動で ['get', '/api/v1/interests'] を生成する
+// invalidateQueries 用に定数化しておく
+const INTERESTS_KEY = ['get', '/api/v1/interests'] as const;
+
+// ① 一覧取得 — パスを指定するだけ。型は自動推論される
+export const useInterests = () =&gt; {
+  return $api.useQuery('get', '/api/v1/interests');
+};
+
+// ② 作成
+export const useCreateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return $api.useMutation('post', '/api/v1/interests', {
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: [...INTERESTS_KEY] });
+    },
+  });
+};
+
+// ③ 更新 — パスパラメータ {id} は自動で型チェックされる
+export const useUpdateInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return $api.useMutation('patch', '/api/v1/interests/{id}', {
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: [...INTERESTS_KEY] });
+    },
+  });
+};
+
+// ④ 削除
+export const useDeleteInterest = () =&gt; {
+  const queryClient = useQueryClient();
+  return $api.useMutation('delete', '/api/v1/interests/{id}', {
+    onSuccess: () =&gt; {
+      queryClient.invalidateQueries({ queryKey: [...INTERESTS_KEY] });
+    },
+  });
+};</code></pre>
+
+      <div class="why-box">
+        手動パターンで書いていた <code>queryKey</code>、<code>queryFn</code>、<code>mutationFn</code>、型ジェネリクスが全て不要になる。<code>$api.useQuery('get', '/api/v1/interests')</code> だけでTanStack Queryの <code>useQuery</code> と同じものが返る。
+      </div>
     </div>
 
-    <div class="flow-diagram">
-【CRUD操作時のデータフロー】
+    <!-- ===== 3-7. mutate の呼び出し方 ===== -->
+    <h2>3-7. フロントエンド: mutate の呼び出し方比較 <span class="section-tag tag-react">React</span></h2>
 
-  ユーザー操作         TanStack Query           Rails API
-  ─────────────────────────────────────────────────────────
-  「登録」ボタン押下
-    └→ createInterest.mutate('TypeScript')
-        └→ POST /api/v1/interests ──────────→ Interest作成
-                                              ← 201 Created
-        └→ onSuccess
-            └→ invalidateQueries(['interests'])
-                └→ useInterests が自動で再fetch
-                    └→ GET /api/v1/interests ─→ 最新一覧返却
-                                                ← 200 OK
-                    └→ UIが自動で再レンダリング
-                        └→ 新しいキーワードが一覧に表示される</div>
+    <p>フックの定義だけでなく、<strong>コンポーネントから <code>mutate()</code> を呼ぶときの引数</strong>も異なる。</p>
 
-    <h2>3-7. フロントエンド: InterestForm コンポーネント <span class="section-tag tag-react">React</span></h2>
+    <div class="pattern-tabs" data-group="mutate">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('mutate', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('mutate', 'openapi')">OpenAPIパターン</button>
+    </div>
 
-    <p>キーワードの入力フォーム。作成と編集の両方で再利用する。</p>
+    <div class="pattern-content active" data-group="mutate" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+      <p>引数の形は <code>useMutation</code> の <code>mutationFn</code> で自由に定義できる。</p>
+
+      <pre><code>// 作成 — mutationFn の引数が (keyword: string) なので文字列を直接渡す
+createInterest.mutate('TypeScript', {
+  onSuccess: () =&gt; toast.success('登録しました'),
+});
+
+// 更新 — mutationFn の引数が { id, keyword } なのでオブジェクトを渡す
+updateInterest.mutate(
+  { id: 1, keyword: 'React' },
+  { onSuccess: () =&gt; toast.success('更新しました') },
+);
+
+// 削除 — mutationFn の引数が (id: number) なので数値を直接渡す
+deleteInterest.mutate(1, {
+  onSuccess: () =&gt; toast.success('削除しました'),
+});</code></pre>
+    </div>
+
+    <div class="pattern-content" data-group="mutate" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+      <p>引数は <code>{ body, params }</code> の統一形式。構造はOpenAPIスキーマから決まる。</p>
+
+      <pre><code>// 作成 — リクエストボディを body に渡す
+createInterest.mutate(
+  { body: { interest: { keyword: 'TypeScript' } } },
+  { onSuccess: () =&gt; toast.success('登録しました') },
+);
+
+// 更新 — パスパラメータは params.path、ボディは body
+updateInterest.mutate(
+  { params: { path: { id: 1 } }, body: { interest: { keyword: 'React' } } },
+  { onSuccess: () =&gt; toast.success('更新しました') },
+);
+
+// 削除 — ボディなし、パスパラメータのみ
+deleteInterest.mutate(
+  { params: { path: { id: 1 } } },
+  { onSuccess: () =&gt; toast.success('削除しました') },
+);</code></pre>
+
+      <div class="why-box">
+        <code>body</code> と <code>params.path</code> の型はOpenAPIスキーマから自動推論される。<code>{ body: { interest: { keyword: 123 } } }</code> と書くとコンパイルエラーになる（<code>keyword</code> は <code>string</code> 型）。
+      </div>
+    </div>
+
+    <!-- ===== 3-8. InterestForm ===== -->
+    <h2>3-8. フロントエンド: InterestForm コンポーネント <span class="section-tag tag-react">React</span></h2>
+
+    <p>キーワードの入力フォーム。作成と編集の両方で再利用する。<strong>このコンポーネントは両パターンで共通。</strong></p>
 
     <div class="file-label">frontend/src/components/interests/InterestForm.tsx</div>
     <pre><code>import { useForm } from 'react-hook-form';
@@ -455,7 +789,7 @@ export function InterestForm({
         &lt;Input
           id="keyword"
           placeholder="例: TypeScript, AWS, React..."
-          {...register('keyword')}   {/* ③ react-hook-formが入力を管理 */}
+          {...register('keyword')}
         /&gt;
         {errors.keyword &amp;&amp; (
           &lt;p className="text-xs text-destructive"&gt;{errors.keyword.message}&lt;/p&gt;
@@ -472,8 +806,6 @@ export function InterestForm({
     &lt;/form&gt;
   );
 }</code></pre>
-
-    <h3>react-hook-form + zod の仕組み</h3>
 
     <div class="why-box">
       <strong>3つのライブラリの役割分担:</strong>
@@ -494,21 +826,27 @@ export function InterestForm({
       <code>isPending</code> を外から受け取ることで、親コンポーネント側のmutationの進行状態に連動してボタンを無効化できる。
     </div>
 
-    <h2>3-8. フロントエンド: InterestList コンポーネント <span class="section-tag tag-react">React</span></h2>
+    <!-- ===== 3-9. InterestList ===== -->
+    <h2>3-9. フロントエンド: InterestList コンポーネント <span class="section-tag tag-react">React</span></h2>
 
-    <p>一覧表示 + CRUD操作を統合するメインコンポーネント。</p>
+    <p>一覧表示 + CRUD操作を統合するメインコンポーネント。<strong>違いは <code>mutate()</code> の引数部分だけ。</strong>UI構造（JSX）は共通。</p>
 
-    <div class="file-label">frontend/src/components/interests/InterestList.tsx</div>
-    <pre><code>import { useState } from 'react';
+    <div class="pattern-tabs" data-group="list">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('list', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('list', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="list" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+
+      <div class="file-label">frontend/src/components/interests/InterestList.tsx</div>
+      <pre><code>import { useState } from 'react';
 import { toast } from 'sonner';
 import { Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InterestForm } from './InterestForm';
 import {
-  useInterests,
-  useCreateInterest,
-  useUpdateInterest,
-  useDeleteInterest,
+  useInterests, useCreateInterest, useUpdateInterest, useDeleteInterest,
 } from '@/hooks/useInterests';
 
 export function InterestList() {
@@ -518,83 +856,111 @@ export function InterestList() {
   const deleteInterest = useDeleteInterest();
   const [editingId, setEditingId] = useState&lt;number | null&gt;(null);
 
-  // ① 作成
   const handleCreate = (keyword: string) =&gt; {
-    createInterest.mutate(keyword, {
+    createInterest.mutate(keyword, {                    // ← 文字列を直接渡す
       onSuccess: () =&gt; toast.success('キーワードを登録しました'),
       onError: (err) =&gt; toast.error(err.message),
     });
   };
 
-  // ② 更新
   const handleUpdate = (id: number, keyword: string) =&gt; {
-    updateInterest.mutate(
-      { id, keyword },
-      {
-        onSuccess: () =&gt; {
-          toast.success('キーワードを更新しました');
-          setEditingId(null);  // 編集モードを解除
-        },
-        onError: (err) =&gt; toast.error(err.message),
-      },
-    );
-  };
-
-  // ③ 削除
-  const handleDelete = (id: number) =&gt; {
-    deleteInterest.mutate(id, {
-      onSuccess: () =&gt; toast.success('キーワードを削除しました'),
+    updateInterest.mutate({ id, keyword }, {            // ← オブジェクトを渡す
+      onSuccess: () =&gt; { toast.success('更新しました'); setEditingId(null); },
       onError: (err) =&gt; toast.error(err.message),
     });
   };
 
-  if (isLoading) {
-    return &lt;p className="text-sm text-muted-foreground"&gt;読み込み中...&lt;/p&gt;;
-  }
+  const handleDelete = (id: number) =&gt; {
+    deleteInterest.mutate(id, {                         // ← 数値を直接渡す
+      onSuccess: () =&gt; toast.success('削除しました'),
+      onError: (err) =&gt; toast.error(err.message),
+    });
+  };
 
-  return (
+  // ... 以下のJSX（return文）はOpenAPIパターンと全く同じ
+  // （InterestForm + 一覧の map）
+}</code></pre>
+    </div>
+
+    <div class="pattern-content" data-group="list" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+
+      <div class="file-label">frontend/src/components/interests/InterestList.tsx</div>
+      <pre><code>import { useState } from 'react';
+import { toast } from 'sonner';
+import { Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { InterestForm } from './InterestForm';
+import {
+  useInterests, useCreateInterest, useUpdateInterest, useDeleteInterest,
+} from '@/hooks/useInterests';
+
+export function InterestList() {
+  const { data: interests, isLoading } = useInterests();
+  const createInterest = useCreateInterest();
+  const updateInterest = useUpdateInterest();
+  const deleteInterest = useDeleteInterest();
+  const [editingId, setEditingId] = useState&lt;number | null&gt;(null);
+
+  const handleCreate = (keyword: string) =&gt; {
+    createInterest.mutate(                              // ← { body } 形式
+      { body: { interest: { keyword } } },
+      { onSuccess: () =&gt; toast.success('キーワードを登録しました'),
+        onError: (err) =&gt; toast.error(err.message) },
+    );
+  };
+
+  const handleUpdate = (id: number, keyword: string) =&gt; {
+    updateInterest.mutate(                              // ← { params, body } 形式
+      { params: { path: { id } }, body: { interest: { keyword } } },
+      { onSuccess: () =&gt; { toast.success('更新しました'); setEditingId(null); },
+        onError: (err) =&gt; toast.error(err.message) },
+    );
+  };
+
+  const handleDelete = (id: number) =&gt; {
+    deleteInterest.mutate(                              // ← { params } のみ
+      { params: { path: { id } } },
+      { onSuccess: () =&gt; toast.success('削除しました'),
+        onError: (err) =&gt; toast.error(err.message) },
+    );
+  };
+
+  // ... 以下のJSX（return文）は手動パターンと全く同じ
+  // （InterestForm + 一覧の map）
+}</code></pre>
+    </div>
+
+    <h3>JSX部分（両パターン共通）</h3>
+
+    <pre><code>  return (
     &lt;div className="space-y-4"&gt;
-      {/* 新規作成フォーム（常に表示） */}
-      &lt;InterestForm
-        onSubmit={handleCreate}
-        isPending={createInterest.isPending}
-      /&gt;
+      &lt;InterestForm onSubmit={handleCreate} isPending={createInterest.isPending} /&gt;
 
-      {/* 一覧 */}
       {interests &amp;&amp; interests.length &gt; 0 ? (
         &lt;ul className="space-y-2"&gt;
           {interests.map((interest) =&gt; (
-            &lt;li
-              key={interest.id}
-              className="flex items-center justify-between rounded-md border px-3 py-2"
-            &gt;
+            &lt;li key={interest.id}
+              className="flex items-center justify-between rounded-md border px-3 py-2"&gt;
               {editingId === interest.id ? (
-                {/* 編集モード: InterestFormを再利用 */}
                 &lt;InterestForm
                   defaultValue={interest.keyword}
-                  onSubmit={(keyword) =&gt; handleUpdate(interest.id, keyword)}
+                  onSubmit={(kw) =&gt; handleUpdate(interest.id, kw)}
                   onCancel={() =&gt; setEditingId(null)}
                   isPending={updateInterest.isPending}
                   submitLabel="更新"
                 /&gt;
               ) : (
-                {/* 表示モード: キーワード + 編集/削除ボタン */}
                 &lt;&gt;
                   &lt;span className="text-sm"&gt;{interest.keyword}&lt;/span&gt;
                   &lt;div className="flex gap-1"&gt;
-                    &lt;Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =&gt; setEditingId(interest.id)}
-                    &gt;
+                    &lt;Button variant="ghost" size="sm"
+                      onClick={() =&gt; setEditingId(interest.id)}&gt;
                       &lt;Pencil className="h-4 w-4" /&gt;
                     &lt;/Button&gt;
-                    &lt;Button
-                      variant="ghost"
-                      size="sm"
+                    &lt;Button variant="ghost" size="sm"
                       onClick={() =&gt; handleDelete(interest.id)}
-                      disabled={deleteInterest.isPending}
-                    &gt;
+                      disabled={deleteInterest.isPending}&gt;
                       &lt;Trash2 className="h-4 w-4 text-destructive" /&gt;
                     &lt;/Button&gt;
                   &lt;/div&gt;
@@ -609,10 +975,7 @@ export function InterestList() {
         &lt;/p&gt;
       )}
     &lt;/div&gt;
-  );
-}</code></pre>
-
-    <h3>コード解説</h3>
+  );</code></pre>
 
     <div class="why-box">
       <strong><code>editingId</code> による表示/編集モードの切り替え:</strong><br>
@@ -620,28 +983,14 @@ export function InterestList() {
       <ul style="margin-top:0.5rem">
         <li><code>editingId === null</code> → 全てのアイテムが表示モード</li>
         <li><code>editingId === 3</code> → id:3 のアイテムだけが編集フォームに切り替わる</li>
-        <li>更新成功時やキャンセル時に <code>setEditingId(null)</code> で表示モードに戻す</li>
+        <li>更新成功やキャンセル時に <code>setEditingId(null)</code> で表示モードに戻す</li>
       </ul>
     </div>
 
-    <div class="why-box">
-      <strong><code>toast</code> によるフィードバック:</strong><br>
-      <code>sonner</code> ライブラリの <code>toast.success()</code> / <code>toast.error()</code> でユーザーに操作結果を通知する。<code>mutate</code> の第2引数でコールバックを渡すパターンは、コンポーネント側でUI反応（toast、モード解除など）を制御したいときに使う。
-    </div>
+    <!-- ===== 3-10. DashboardPage 統合 ===== -->
+    <h2>3-10. フロントエンド: DashboardPage への統合 <span class="section-tag tag-react">React</span></h2>
 
-    <div class="why-box">
-      <strong>InterestForm の再利用パターン:</strong><br>
-      同じ <code>InterestForm</code> コンポーネントが2回使われている:
-      <ul style="margin-top:0.5rem">
-        <li><strong>上部:</strong> 新規作成用 — <code>defaultValue</code> なし、<code>onCancel</code> なし</li>
-        <li><strong>一覧内:</strong> 編集用 — <code>defaultValue={interest.keyword}</code>、<code>onCancel</code> あり</li>
-      </ul>
-      Propsの違いだけでフォームの振る舞いが変わる。同じUIを2つ書くのではなく、Propsで制御するのがReactコンポーネント設計の基本。
-    </div>
-
-    <h2>3-9. フロントエンド: DashboardPage への統合 <span class="section-tag tag-react">React</span></h2>
-
-    <p>作成したコンポーネントを Dashboard に組み込む。</p>
+    <p>作成したコンポーネントを Dashboard に組み込む。<strong>この部分は両パターンで共通。</strong></p>
 
     <div class="file-label">frontend/src/pages/DashboardPage.tsx（変更部分）</div>
     <pre><code>import { InterestList } from '@/components/interests/InterestList';
@@ -658,30 +1007,93 @@ export function InterestList() {
 &lt;/Card&gt;</code></pre>
 
     <div class="why-box">
-      <code>&lt;InterestList /&gt;</code> を置くだけでCRUD機能が動く理由: コンポーネント内部で <code>useInterests</code>（データ取得）と各 <code>useMutation</code>（データ変更）を呼んでおり、TanStack Queryが全てのサーバー状態を管理しているため。親コンポーネント（DashboardPage）はInterestのデータを一切知らなくていい。
+      <code>&lt;InterestList /&gt;</code> を置くだけでCRUD機能が動く理由: コンポーネント内部で <code>useInterests</code>（データ取得）と各 <code>useMutation</code>（データ変更）を呼んでおり、TanStack Queryが全てのサーバー状態を管理しているため。親コンポーネント（DashboardPage）はInterestのデータを一切知らなくていい。<br><br>
+      <strong>フック（手動 or $api）をどちらに切り替えても、このDashboardPageは一切変更不要。</strong> 差し替わるのは <code>hooks/useInterests.ts</code> の中身だけ。
     </div>
 
-    <h2>3-10. ファイル構成まとめ</h2>
+    <!-- ===== 3-11. データフロー図 ===== -->
+    <h2>3-11. データフロー（両パターン共通）</h2>
 
-    <pre><code>frontend/src/
+    <p>どちらのパターンでも、TanStack Query のキャッシュ無効化 → 自動再取得の流れは同じ。</p>
+
+    <div class="flow-diagram">
+【CRUD操作時のデータフロー】
+
+  ユーザー操作         TanStack Query              Rails API
+  ─────────────────────────────────────────────────────────
+  「登録」ボタン押下
+    └→ createInterest.mutate(...)
+        └→ POST /api/v1/interests ──────────→ Interest作成
+                                              ← 201 Created
+        └→ onSuccess
+            └→ invalidateQueries(queryKey)
+                └→ useInterests が自動で再fetch
+                    └→ GET /api/v1/interests ─→ 最新一覧返却
+                                                ← 200 OK
+                    └→ UIが自動で再レンダリング
+                        └→ 新しいキーワードが一覧に表示される
+
+  ※ mutate() の引数形式だけが異なる:
+  ・手動:   createInterest.mutate('TypeScript')
+  ・OpenAPI: createInterest.mutate({ body: { interest: { keyword: 'TypeScript' } } })</div>
+
+    <h2>3-12. ファイル構成まとめ</h2>
+
+    <div class="pattern-tabs" data-group="structure">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('structure', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('structure', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="structure" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+      <pre><code>frontend/src/
 ├── types/
-│   ├── user.ts              # User型
-│   └── interest.ts          # Interest型
+│   ├── user.ts              # User型（手書き）
+│   └── interest.ts          # Interest型（手書き）
+├── lib/
+│   ├── api.ts               # 自作fetchヘルパー
+│   └── utils.ts
 ├── hooks/
-│   ├── useAuth.ts           # 認証フック（Step 2）
-│   └── useInterests.ts      # Interest CRUDフック ← 今回追加
+│   ├── useAuth.ts           # 認証フック
+│   └── useInterests.ts      # Interest CRUDフック
 ├── components/
 │   ├── auth/
-│   │   └── AuthGuard.tsx    # 認証ガード（Step 2）
+│   │   └── AuthGuard.tsx
 │   └── interests/
-│       ├── InterestForm.tsx  # 入力フォーム ← 今回追加
-│       └── InterestList.tsx  # 一覧 + CRUD ← 今回追加
+│       ├── InterestForm.tsx  # 入力フォーム（共通）
+│       └── InterestList.tsx  # 一覧 + CRUD
 └── pages/
-    ├── SignInPage.tsx        # ログイン（Step 2）
-    ├── SignUpPage.tsx        # 新規登録（Step 2）
-    └── DashboardPage.tsx     # ダッシュボード ← InterestList統合</code></pre>
+    ├── SignInPage.tsx
+    ├── SignUpPage.tsx
+    └── DashboardPage.tsx</code></pre>
+    </div>
 
-    <h2>3-11. 動作確認チェックリスト</h2>
+    <div class="pattern-content" data-group="structure" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+      <pre><code>frontend/src/
+├── lib/
+│   ├── api/
+│   │   └── v1.d.ts          # OpenAPIから自動生成された型
+│   ├── client.ts            # openapi-fetch クライアント
+│   ├── $api.ts              # openapi-react-query セットアップ
+│   └── utils.ts
+├── hooks/
+│   ├── useAuth.ts           # 認証フック（$api使用）
+│   └── useInterests.ts      # Interest CRUDフック（$api使用）
+├── components/
+│   ├── auth/
+│   │   └── AuthGuard.tsx
+│   └── interests/
+│       ├── InterestForm.tsx  # 入力フォーム（共通）
+│       └── InterestList.tsx  # 一覧 + CRUD
+└── pages/
+    ├── SignInPage.tsx
+    ├── SignUpPage.tsx
+    └── DashboardPage.tsx</code></pre>
+      <p style="margin-top:0.75rem"><code>types/</code> ディレクトリが不要になる。型は <code>lib/api/v1.d.ts</code> に全て自動生成される。</p>
+    </div>
+
+    <h2>3-13. 動作確認チェックリスト</h2>
 
     <h3>バックエンド</h3>
     <ol>
@@ -707,5 +1119,14 @@ export function InterestList() {
       <a href="step4-news-dashboard.html">Step 4: ニュース & ダッシュボード →</a>
     </div>
   </div>
+
+  <script>
+    function switchTab(group, tab) {
+      document.querySelectorAll(`.pattern-tab[onclick*="'${group}'"]`).forEach(el => el.classList.remove('active'));
+      document.querySelectorAll(`.pattern-content[data-group="${group}"]`).forEach(el => el.classList.remove('active'));
+      document.querySelector(`.pattern-tab[onclick*="'${group}', '${tab}'"]`).classList.add('active');
+      document.querySelector(`.pattern-content[data-group="${group}"][data-tab="${tab}"]`).classList.add('active');
+    }
+  </script>
 </body>
 </html>

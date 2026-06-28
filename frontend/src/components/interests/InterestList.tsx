@@ -18,15 +18,18 @@ export function InterestList() {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const handleCreate = (keyword: string) => {
-    createInterest.mutate(keyword, {
-      onSuccess: () => toast.success("キーワードを登録しました"),
-      onError: (err) => toast.error(err.message),
-    });
+    createInterest.mutate(
+      { body: { interest: { keyword } } },
+      {
+        onSuccess: () => toast.success("キーワードを登録しました"),
+        onError: (err) => toast.error(err.message),
+      },
+    );
   };
 
   const handleUpdate = (id: number, keyword: string) => {
     updateInterest.mutate(
-      { id, keyword },
+      { params: { path: { id } }, body: { interest: { keyword } } },
       {
         onSuccess: () => {
           toast.success("キーワードを更新しました");
@@ -38,10 +41,13 @@ export function InterestList() {
   };
 
   const handleDelete = (id: number) => {
-    deleteInterest.mutate(id, {
-      onSuccess: () => toast.success("キーワードを削除しました"),
-      onError: (err) => toast.error(err.message),
-    });
+    deleteInterest.mutate(
+      { params: { path: { id } } },
+      {
+        onSuccess: () => toast.success("キーワードを削除しました"),
+        onError: (err) => toast.error(err.message),
+      },
+    );
   };
 
   if (isLoading) {

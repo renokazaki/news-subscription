@@ -18,10 +18,14 @@ export function SignUpPage() {
     e.preventDefault();
     signUp.mutate(
       {
-        email,
-        password,
-        password_confirmation: passwordConfirmation,
-        display_name: displayName,
+        body: {
+          user: {
+            email,
+            password,
+            password_confirmation: passwordConfirmation,
+            display_name: displayName,
+          },
+        },
       },
       { onSuccess: () => navigate("/dashboard", { replace: true }) },
     );

@@ -10,9 +10,10 @@ export function DashboardPage() {
   const signOut = useSignOut();
 
   const handleSignOut = () => {
-    signOut.mutate(undefined, {
-      onSuccess: () => navigate("/sign-in", { replace: true }),
-    });
+    signOut.mutate(
+      {},
+      { onSuccess: () => navigate("/sign-in", { replace: true }) },
+    );
   };
 
   return (
