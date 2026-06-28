@@ -177,7 +177,7 @@ end</code></pre>
     <div class="file-label">backend/spec/spec_helper.rb または rails_helper.rb（追加）</div>
     <pre><code>RSpec::OpenAPI.path = 'doc/openapi.yaml'
 RSpec::OpenAPI.title = 'News Picker API'
-RSpec::OpenAPI.description = 'News Picker バックエンドAPI'
+RSpec::OpenAPI.info = { description: 'News Picker バックエンドAPI' }
 RSpec::OpenAPI.servers = [{ url: 'http://localhost:3000' }]</code></pre>
 
     <div class="why-box">

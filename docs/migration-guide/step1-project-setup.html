@@ -108,21 +108,37 @@ end</code></pre>
 gem 'rack-cors'           # CORSヘッダー管理（フロントエンドからのリクエスト許可に必須）
 gem 'jsonapi-serializer'  # JSON出力の整形。レスポンス形式を統一する
 
-# Background Jobs
-gem 'sidekiq'             # 非同期ジョブ処理（Redis使用）
-gem 'sidekiq-scheduler'   # cron的な定期実行
-
-# HTTP Client
-gem 'faraday'             # 外部API呼び出し用。Net::HTTPより扱いやすい
-
 # Auth
 gem 'devise'              # 認証フレームワーク
 gem 'devise-jwt'          # JWT認証（ステートレスAPI認証）
 
-# Development / Test
-gem 'rspec-rails', group: [:development, :test]
-gem 'factory_bot_rails', group: [:development, :test]
-gem 'rspec-openapi', group: [:test]  # RSpecからOpenAPI仕様書を自動生成</code></pre>
+# Background Jobs
+gem 'sidekiq'             # 非同期ジョブ処理（Redis使用）
+gem 'sidekiq-scheduler'   # cron的な定期実行
+
+# Environment
+gem 'dotenv-rails', groups: [:development, :test]  # .envファイルから環境変数を読み込む
+
+# HTTP Client
+gem 'faraday'             # 外部API呼び出し用。Net::HTTPより扱いやすい
+
+group :development, :test do
+  gem 'debug', platforms: [:mri, :windows], require: 'debug/prelude'
+  gem 'bundler-audit', require: false
+  gem 'brakeman', require: false
+  gem 'rubocop-rails-omakase', require: false
+  gem 'rspec-rails'
+  gem 'factory_bot_rails'
+  gem 'faker'               # テスト用ダミーデータ生成
+end
+
+group :test do
+  gem 'rspec-openapi'       # RSpecからOpenAPI仕様書を自動生成
+end</code></pre>
+
+    <div class="warn-box">
+      <code>dotenv-rails</code> は <code>devise-jwt</code> が必要とする <code>DEVISE_JWT_SECRET_KEY</code> などの環境変数を <code>.env</code> ファイルから読み込むために必要。これがないと <code>ENV.fetch('DEVISE_JWT_SECRET_KEY')</code> で <code>KeyError</code> が発生する。
+    </div>
 
     <div class="why-box">
       <code>rspec-openapi</code> はRSpecのリクエストスペックを実行するだけで、OpenAPI（Swagger）仕様書のYAML/JSONを自動生成するgem。手動でAPI仕様書をメンテナンスする必要がなくなり、「テストが通る = 仕様書が最新」の状態を維持できる。詳細は <a href="openapi-workflow.html" style="color: var(--accent);">OpenAPIワークフロー解説</a> を参照。
@@ -139,10 +155,19 @@ gem 'rspec-openapi', group: [:test]  # RSpecからOpenAPI仕様書を自動生�
     <pre><code>rails generate rspec:install</code></pre>
 
     <div class="file-label">backend/spec/rails_helper.rb（追加）</div>
-    <pre><code># rspec-openapi の設定
+    <pre><code>RSpec.configure do |config|
+  # FactoryBotのメソッド（create, buildなど）をテスト内で直接使えるようにする
+  config.include FactoryBot::Syntax::Methods
+end
+
+# rspec-openapi の設定（RSpec.configureブロックの外に書く）
 RSpec::OpenAPI.path = 'doc/openapi.yaml'
 RSpec::OpenAPI.title = 'News Picker API'
-RSpec::OpenAPI.description = 'News Picker REST API specification'</code></pre>
+RSpec::OpenAPI.info = { description: 'News Picker REST API specification' }</code></pre>
+
+    <div class="warn-box">
+      <code>RSpec::OpenAPI.info</code> にはHash（例: <code>{ description: '...' }</code>）を渡す必要がある。Stringを渡すと <code>TypeError: no implicit conversion of String into Hash</code> が発生する。また、<code>description=</code> は rspec-openapi v0.29+ では存在しないメソッドなので使わないこと。
+    </div>
 
     <div class="why-box">
       <code>rspec-openapi</code> は特別な設定なしでも動作するが、出力先を明示することで、フロントエンドの <code>generate:api</code> スクリプトと整合性が取れる。リクエストスペック（<code>spec/requests/</code>）を実行するとき、<code>OPENAPI=1 bundle exec rspec</code> で仕様書が更新される。
@@ -215,29 +240,66 @@ npm install</code></pre>
     </div>
 
     <h3>Tailwind CSS 4 セットアップ</h3>
-    <pre><code>npm install -D tailwindcss @tailwindcss/vite</code></pre>
+    <pre><code>npm install tailwindcss @tailwindcss/vite</code></pre>
 
-    <div class="file-label">frontend/vite.config.ts（差分）</div>
-    <pre><code>import tailwindcss from '@tailwindcss/vite'
+    <div class="file-label">frontend/vite.config.ts</div>
+    <pre><code>import path from 'path'
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),  // 追加
-  ],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
 })</code></pre>
+
+    <div class="why-box">
+      <code>resolve.alias</code> の <code>@</code> 設定は、<code>import { Button } from '@/components/ui/button'</code> のようなパスエイリアスを実行時に解決するために必要。TypeScriptの <code>paths</code> だけではビルドツール（Vite）が解決できない。
+    </div>
 
     <div class="file-label">frontend/src/index.css</div>
     <pre><code>@import "tailwindcss";</code></pre>
+
+    <h3>パスエイリアスの設定（shadcn/ui の前提条件）</h3>
+
+    <p>shadcn/ui の <code>init</code> は <code>tsconfig.json</code> にパスエイリアスが設定されていないと失敗する。先に設定しておく:</p>
+
+    <div class="file-label">frontend/tsconfig.json</div>
+    <pre><code>{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}</code></pre>
+
+    <div class="file-label">frontend/tsconfig.app.json（compilerOptionsに追加）</div>
+    <pre><code>"baseUrl": ".",
+"paths": {
+  "@/*": ["./src/*"]
+}</code></pre>
+
+    <div class="warn-box">
+      パスエイリアスは3箇所に設定が必要: <code>tsconfig.json</code>（shadcn CLIが参照）、<code>tsconfig.app.json</code>（TypeScriptコンパイラが参照）、<code>vite.config.ts</code>（Viteバンドラが参照）。いずれかが欠けるとimportエラーやshadcn initの失敗が起きる。
+    </div>
 
     <h3>shadcn/ui セットアップ</h3>
     <pre><code>npx shadcn@latest init</code></pre>
 
     <p>設問に以下のように回答:</p>
     <ul>
-      <li>Style: Default</li>
-      <li>Base color: Slate</li>
-      <li>CSS variables: Yes</li>
+      <li>Component library: Radix</li>
+      <li>Preset: Nova（または好みのプリセット）</li>
     </ul>
 
     <p>必要なコンポーネントを追加（既存プロジェクトで使っているもの）:</p>

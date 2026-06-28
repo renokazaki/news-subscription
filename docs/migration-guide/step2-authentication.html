@@ -96,6 +96,10 @@ gem 'devise-jwt'</code></pre>
 
     <pre><code>bundle install</code></pre>
 
+    <div class="warn-box">
+      <code>devise-jwt</code> は <code>DEVISE_JWT_SECRET_KEY</code> 環境変数を必要とする。Step 1で <code>dotenv-rails</code> を導入済みであること、<code>.env</code> に秘密鍵が設定済みであることを確認する。未設定だと <code>rails generate devise:install</code> 含む全てのrailsコマンドが <code>KeyError</code> で失敗する。
+    </div>
+
     <div class="why-box">
       <strong>devise-jwt</strong> はDeviseにJWT認証を統合するgem。ログイン成功時に自動でJWTトークンを生成し、<code>Authorization</code> ヘッダーに載せてレスポンスを返す。以降のリクエストでは同ヘッダーのトークンを検証してユーザーを特定する。<br><br>
       Deviseの認証ロジック（パスワードハッシュ・バリデーション・モジュール管理）はそのまま活用し、セッション管理だけをJWTに置き換える仕組み。
@@ -108,20 +112,28 @@ gem 'devise-jwt'</code></pre>
     <h3>Devise設定の調整</h3>
 
     <div class="file-label">backend/config/initializers/devise.rb（変更箇所のみ）</div>
-    <pre><code># API-onlyなのでHTMLナビゲーションを無効化
-config.navigational_formats = []
+    <pre><code>Devise.setup do |config|
+  # ... 既存の設定 ...
 
-# JWT設定
-config.jwt do |jwt|
-  jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY')
-  jwt.dispatch_requests = [
-    ['POST', %r{^/api/v1/auth/sign_in$}]
-  ]
-  jwt.revocation_requests = [
-    ['DELETE', %r{^/api/v1/auth/sign_out$}]
-  ]
-  jwt.expiration_time = 24.hours.to_i
-end</code></pre>
+  # API-onlyなのでHTMLナビゲーションを無効化
+  config.navigational_formats = []
+
+  # JWT設定
+  config.jwt do |jwt|
+    jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY')
+    jwt.dispatch_requests = [
+      ['POST', %r{^/api/v1/auth/sign_in$}]
+    ]
+    jwt.revocation_requests = [
+      ['DELETE', %r{^/api/v1/auth/sign_out$}]
+    ]
+    jwt.expiration_time = 24.hours.to_i
+  end  # ← config.jwt の end
+end    # ← Devise.setup の end</code></pre>
+
+    <div class="warn-box">
+      <code>config.jwt do |jwt| ... end</code> は <code>Devise.setup do |config| ... end</code> の中にネストする。<code>end</code> が2つ必要。<code>config.jwt</code> ブロックの <code>end</code> を忘れると <code>SyntaxError: unexpected end-of-input</code> になる。
+    </div>
 
     <div class="why-box">
       <strong><code>navigational_formats = []</code></strong> — デフォルトでは認証失敗時にHTMLリダイレクトしようとする。API-onlyでは常にJSONレスポンスを返したいので、空配列にしてリダイレクトを無効化する。これがないと401の代わりに302リダイレクトが返ってしまう。
@@ -192,7 +204,12 @@ end</code></pre>
       <code>exp</code> を保存する理由: トークンの有効期限が過ぎたdenylistレコードは不要なので、定期的にクリーンアップできるようにする。
     </div>
 
-    <pre><code>rails db:migrate</code></pre>
+    <pre><code>rails db:migrate
+rails db:migrate RAILS_ENV=test</code></pre>
+
+    <div class="warn-box">
+      テスト用DBにもマイグレーションが必要。<code>RAILS_ENV=test</code> を忘れると、RSpec実行時に <code>ActiveRecord::PendingMigrationError</code> が発生する。
+    </div>
 
     <h3>モデルの実装</h3>
 
@@ -244,9 +261,8 @@ end</code></pre>
     return render_unauthorized unless token
 
     begin
-      # devise-jwt がトークンをデコードし、ユーザーを特定
       @current_user = Warden::JWTAuth::UserDecoder.new.call(token, :user, nil)
-    rescue JWT::DecodeError, JWT::ExpiredSignature
+    rescue JWT::DecodeError, JWT::ExpiredSignature, Warden::JWTAuth::Errors::RevokedToken, NoMethodError
       render_unauthorized
     end
   end
@@ -322,7 +338,7 @@ end</code></pre>
   module V1
     module Auth
       class SessionsController &lt; ApplicationController
-        skip_before_action :authenticate_user!, only: [:create]
+        skip_before_action :authenticate_user!, only: [:create, :destroy]
 
         def create
           user = User.find_by(email: params[:user][:email])
@@ -383,6 +399,8 @@ end</code></pre>
 
     <div class="file-label">backend/config/routes.rb</div>
     <pre><code>Rails.application.routes.draw do
+  devise_for :users, skip: :all
+
   namespace :api do
     namespace :v1 do
       get 'health', to: 'health#show'
@@ -397,6 +415,10 @@ end</code></pre>
     end
   end
 end</code></pre>
+
+    <div class="why-box">
+      <strong><code>devise_for :users, skip: :all</code></strong> — Deviseのデフォルトルート（/users/sign_in等）は生成せず、Wardenにuserスコープのマッピングだけ登録する。これがないとWardenのJWTミドルウェアがトークン処理時にUserモデルを解決できず <code>NoMethodError: undefined method 'find_for_jwt_authentication' for nil</code> が発生する。ルーティングは自前で <code>namespace :auth</code> 内に定義する。
+    </div>
 
     <h3>ユーザー情報取得エンドポイント</h3>
 
@@ -455,7 +477,7 @@ RSpec.describe 'Api::V1::Auth::Registrations', type: :request do
              params: { user: { email: '', password: '' } },
              as: :json
 
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_content)
       end
     end
   end
