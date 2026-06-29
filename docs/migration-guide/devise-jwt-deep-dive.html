@@ -313,7 +313,7 @@ AllowlistedJwt.find_by(jti: token_jti).destroy</code></pre>
 
     <p>期限切れのトークンはdenylistに残しておく意味がない。定期的に削除する:</p>
 
-    <pre><code># Rakeタスクまたは Sidekiq Scheduler で定期実行
+    <pre><code># Rakeタスクまたは Solid Queue の定期実行（recurring.yml）で実行
 JwtDenylist.where('exp &lt; ?', Time.current).delete_all</code></pre>
 
     <!-- ============================= -->

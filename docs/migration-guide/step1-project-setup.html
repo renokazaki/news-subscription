@@ -113,8 +113,7 @@ gem 'devise'              # 認証フレームワーク
 gem 'devise-jwt'          # JWT認証（ステートレスAPI認証）
 
 # Background Jobs
-gem 'sidekiq'             # 非同期ジョブ処理（Redis使用）
-gem 'sidekiq-scheduler'   # cron的な定期実行
+gem 'solid_queue'         # ジョブキュー（Rails 8標準、PostgreSQL使用、Redis不要）
 
 # Environment
 gem 'dotenv-rails', groups: [:development, :test]  # .envファイルから環境変数を読み込む

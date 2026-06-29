@@ -216,7 +216,7 @@
         <span class="tech-badge react">TanStack Query</span>
         <span class="tech-badge rails">Rails 7 API</span>
         <span class="tech-badge rails">Devise + JWT</span>
-        <span class="tech-badge rails">Sidekiq</span>
+        <span class="tech-badge rails">Solid Queue</span>
         <span class="tech-badge react">OpenAPI</span>
         <span class="tech-badge aws">AWS CDK</span>
       </div>
@@ -226,7 +226,7 @@
       <h2>このガイドについて</h2>
       <ul>
         <li>React: 上級者向け - ポイントのみ解説（TanStack Query連携、認証フロー等）</li>
-        <li>Rails: 中級者向け - Devise認証, Sidekiq, Service層を丁寧に。「なぜ必要か」を常に解説</li>
+        <li>Rails: 中級者向け - Devise認証, Solid Queue, Service層を丁寧に。「なぜ必要か」を常に解説</li>
         <li>AWS: 中級者向け - CDKによるECS/RDS/CloudFront構成をステップバイステップで</li>
         <li>各Stepは独立して読める構成。上から順に進めることを推奨</li>
         <li>OpenAPIによる型安全なAPI連携パイプライン（rspec-openapi → openapi-typescript → openapi-react-query）</li>
@@ -349,26 +349,7 @@
       <!-- Step 5 -->
       <a href="step5-background-jobs.html" class="step-card">
         <div class="step-header">
-          <div class="step-number rails">05</div>
-          <div class="step-title">バックグラウンドジョブ（Sidekiq）</div>
-        </div>
-        <div class="step-desc">
-          Redis + Sidekiqセットアップ、TavilyService/AiSummaryServiceの実装、FetchNewsJobの構築。n8nワークフローのRails内包化。
-        </div>
-        <div class="step-tags">
-          <span class="tag">Sidekiq</span>
-          <span class="tag">Redis</span>
-          <span class="tag">Tavily API</span>
-          <span class="tag">Google AI</span>
-          <span class="tag">Faraday</span>
-          <span class="depth-indicator depth-detailed">Rails: 詳細</span>
-        </div>
-      </a>
-
-      <!-- Step 6 -->
-      <a href="step6-landing-and-polish.html" class="step-card">
-        <div class="step-header">
-          <div class="step-number react">06</div>
+          <div class="step-number react">05</div>
           <div class="step-title">ランディングページ & 仕上げ</div>
         </div>
         <div class="step-desc">
@@ -380,6 +361,25 @@
           <span class="tag">エラーバウンダリ</span>
           <span class="tag">レスポンシブ</span>
           <span class="depth-indicator depth-light">React: 置換パターン集</span>
+        </div>
+      </a>
+
+      <!-- Step 6 -->
+      <a href="step6-landing-and-polish.html" class="step-card">
+        <div class="step-header">
+          <div class="step-number rails">06</div>
+          <div class="step-title">定期実行（Solid Queue）</div>
+        </div>
+        <div class="step-desc">
+          登録キーワードの定期ニュース収集パイプライン。Solid Queue（Rails 8標準）による定期実行、TavilyService/AiSummaryServiceの実装。Redis不要。
+        </div>
+        <div class="step-tags">
+          <span class="tag">Solid Queue</span>
+          <span class="tag">recurring_tasks</span>
+          <span class="tag">Tavily API</span>
+          <span class="tag">Google AI</span>
+          <span class="tag">Faraday</span>
+          <span class="depth-indicator depth-detailed">Rails: 詳細</span>
         </div>
       </a>
 

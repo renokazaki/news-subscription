@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 5: バックグラウンドジョブ（Sidekiq） | News Picker 移行ガイド</title>
+  <title>Step 5: ランディングページ & 仕上げ | News Picker 移行ガイド</title>
   <style>
     :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,10 +20,6 @@
     .goal-box h3 { margin-top: 0; color: var(--green); }
     .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
     .why-box::before { content: "💡 なぜ必要か"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
-    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
-    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
-    .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
-    .tip-box::before { content: "📝 Tips"; display: block; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; font-size: 0.85rem; }
     pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
     code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
     :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
@@ -35,393 +31,264 @@
     .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
     .nav-footer a:hover { text-decoration: underline; }
     .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
-    .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
-    .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; white-space: pre; overflow-x: auto; }
+    .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    th, td { padding: 0.75rem; text-align: left; border: 1px solid var(--border); }
+    th { background: var(--surface); color: var(--accent); }
+    td { background: var(--code-bg); }
+    .arrow { color: var(--green); font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
     <a href="index.html" class="back-link">← ガイド一覧に戻る</a>
 
-    <h1>Step 5: バックグラウンドジョブ（Sidekiq）</h1>
-    <p class="step-meta">所要時間: 1〜2日 | n8nワークフローをRails内に構築</p>
+    <h1>Step 5: ランディングページ & 仕上げ</h1>
+    <p class="step-meta">所要時間: 1日 | Next.js固有コードの置換パターン集 + エラーハンドリング</p>
 
     <div class="goal-box">
       <h3>このStepのゴール</h3>
-      <p>Interest登録時に自動でニュースを収集（Tavily API）→ AI要約（Google AI）→ DB保存する非同期パイプラインが動作する。n8nの外部ワークフローが完全にRails内に置き換わる。</p>
+      <p>Next.js固有のAPIを全てReact標準に置き換え、ランディングページを移植し、エラーハンドリングとレスポンシブ対応を完了させる。</p>
     </div>
 
-    <h2>全体フロー</h2>
+    <h2>5-1. 置換パターン一覧 <span class="section-tag tag-react">React</span></h2>
 
-    <div class="flow-diagram">
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐     ┌──────────┐
-│ Interest    │────▶│ FetchNewsJob │────▶│ TavilyService   │────▶│ Tavily   │
-│ 作成       │     │ (Sidekiq)    │     │ (HTTP Client)   │     │ API      │
-└─────────────┘     └──────┬───────┘     └─────────────────┘     └──────────┘
-                           │
-                           ▼
-                    ┌──────────────────┐     ┌──────────┐
-                    │ AiSummaryService │────▶│ Google   │
-                    │ (要約・フィルタ)  │     │ AI API   │
-                    └──────┬───────────┘     └──────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │ News.create! │
-                    │ (DB保存)     │
-                    └──────────────┘</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Next.js</th>
+          <th></th>
+          <th>React + Vite</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>"use client"</code></td>
+          <td class="arrow">→</td>
+          <td>削除（全てクライアントコンポーネント）</td>
+        </tr>
+        <tr>
+          <td><code>import Image from 'next/image'</code></td>
+          <td class="arrow">→</td>
+          <td><code>&lt;img&gt;</code> タグ</td>
+        </tr>
+        <tr>
+          <td><code>import Link from 'next/link'</code></td>
+          <td class="arrow">→</td>
+          <td><code>import { Link } from 'react-router'</code></td>
+        </tr>
+        <tr>
+          <td><code>useRouter()</code> from next/navigation</td>
+          <td class="arrow">→</td>
+          <td><code>useNavigate()</code> from react-router</td>
+        </tr>
+        <tr>
+          <td><code>useSearchParams()</code> from next/navigation</td>
+          <td class="arrow">→</td>
+          <td><code>useSearchParams()</code> from react-router</td>
+        </tr>
+        <tr>
+          <td><code>usePathname()</code></td>
+          <td class="arrow">→</td>
+          <td><code>useLocation().pathname</code></td>
+        </tr>
+        <tr>
+          <td><code>router.push('/path')</code></td>
+          <td class="arrow">→</td>
+          <td><code>navigate('/path')</code></td>
+        </tr>
+        <tr>
+          <td><code>redirect('/path')</code> (Server)</td>
+          <td class="arrow">→</td>
+          <td><code>navigate('/path', { replace: true })</code></td>
+        </tr>
+        <tr>
+          <td>Server Actions (<code>"use server"</code>)</td>
+          <td class="arrow">→</td>
+          <td>TanStack Query <code>useMutation</code></td>
+        </tr>
+        <tr>
+          <td><code>revalidatePath()</code></td>
+          <td class="arrow">→</td>
+          <td><code>queryClient.invalidateQueries()</code></td>
+        </tr>
+        <tr>
+          <td>async Server Components</td>
+          <td class="arrow">→</td>
+          <td><code>useQuery</code> + Suspense/Loading状態</td>
+        </tr>
+        <tr>
+          <td><code>useAuth()</code> from @clerk/nextjs</td>
+          <td class="arrow">→</td>
+          <td><code>useCurrentUser()</code> (自作フック)</td>
+        </tr>
+        <tr>
+          <td><code>&lt;UserButton /&gt;</code> (Clerk)</td>
+          <td class="arrow">→</td>
+          <td>自作 <code>&lt;UserMenu /&gt;</code></td>
+        </tr>
+        <tr>
+          <td><code>metadata</code> export (SEO)</td>
+          <td class="arrow">→</td>
+          <td>不要（SPAではサーバーレンダリングしない）</td>
+        </tr>
+        <tr>
+          <td>手動 <code>useQuery</code> / <code>useMutation</code></td>
+          <td class="arrow">→</td>
+          <td><code>$api.useQuery</code> / <code>$api.useMutation</code>（OpenAPI自動生成）</td>
+        </tr>
+      </tbody>
+    </table>
 
-    <h2>5-1. Redis + Sidekiq セットアップ <span class="section-tag tag-rails">Rails</span></h2>
+    <h2>5-2. next/image → img 置換 <span class="section-tag tag-react">React</span></h2>
 
-    <h3>Redisの起動</h3>
-    <pre><code># macOS (Homebrew)
-brew install redis
-brew services start redis
+    <h3>Before</h3>
+    <pre><code>import Image from 'next/image'
 
-# Docker
-docker run -d --name redis -p 6379:6379 redis:7-alpine
+&lt;Image
+  src="/hero.png"
+  alt="Hero"
+  width={600}
+  height={400}
+  priority
+/&gt;</code></pre>
 
-# 接続確認
-redis-cli ping
-# => PONG</code></pre>
+    <h3>After</h3>
+    <pre><code>&lt;img
+  src="/hero.png"
+  alt="Hero"
+  width={600}
+  height={400}
+  loading="eager"  // priority相当
+  className="w-full h-auto"
+/&gt;</code></pre>
 
     <div class="why-box">
-      <strong>なぜRedisが必要か:</strong> Sidekiqはジョブキューとしてメモリ内データストアのRedisを使う。ジョブの投入（enqueue）と取り出し（dequeue）がRedisのリストデータ構造で行われ、ワーカープロセスがジョブをポーリングして実行する。RDBにキューを置くよりも桁違いに高速（1秒に数万ジョブ処理可能）。
+      <code>next/image</code> が提供していた最適化（WebP変換、レスポンシブ srcset、遅延読み込み）はVite SPAでは使えない。<code>loading="lazy"</code> でブラウザネイティブの遅延読み込みは利用可能。画像最適化が必要なら、ビルド時に <code>vite-plugin-image-optimizer</code> を使うか、CDN側（CloudFront）で画像変換する。
     </div>
 
-    <h3>Sidekiq設定</h3>
+    <h2>5-3. next/link → React Router Link <span class="section-tag tag-react">React</span></h2>
 
-    <div class="file-label">backend/config/initializers/sidekiq.rb</div>
-    <pre><code>Sidekiq.configure_server do |config|
-  config.redis = { url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/0') }
-end
+    <h3>Before</h3>
+    <pre><code>import Link from 'next/link'
 
-Sidekiq.configure_client do |config|
-  config.redis = { url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/0') }
-end</code></pre>
+&lt;Link href="/dashboard"&gt;
+  ダッシュボード
+&lt;/Link&gt;</code></pre>
+
+    <h3>After</h3>
+    <pre><code>import { Link } from 'react-router'
+
+&lt;Link to="/dashboard"&gt;
+  ダッシュボード
+&lt;/Link&gt;</code></pre>
+
+    <p>主な違い: <code>href</code> → <code>to</code> に変更するだけ。</p>
+
+    <h2>5-4. ルーティング（useRouter → useNavigate） <span class="section-tag tag-react">React</span></h2>
+
+    <h3>Before</h3>
+    <pre><code>import { useRouter } from 'next/navigation'
+
+const router = useRouter()
+router.push('/dashboard')
+router.replace('/sign-in')
+router.back()</code></pre>
+
+    <h3>After</h3>
+    <pre><code>import { useNavigate } from 'react-router'
+
+const navigate = useNavigate()
+navigate('/dashboard')
+navigate('/sign-in', { replace: true })
+navigate(-1)  // back</code></pre>
+
+    <h2>5-5. エラーバウンダリ <span class="section-tag tag-react">React</span></h2>
+
+    <p>Next.js の <code>error.tsx</code> に相当する機能を React Router の <code>errorElement</code> で実現:</p>
+
+    <pre><code>// ルート定義
+{
+  path: '/dashboard',
+  element: &lt;DashboardPage /&gt;,
+  errorElement: &lt;ErrorPage /&gt;,  // このルート以下でのエラーをキャッチ
+}
+
+// ErrorPage.tsx
+import { useRouteError, isRouteErrorResponse } from 'react-router'
+
+function ErrorPage() {
+  const error = useRouteError()
+
+  if (isRouteErrorResponse(error)) {
+    return &lt;div&gt;{error.status}: {error.statusText}&lt;/div&gt;
+  }
+
+  return &lt;div&gt;予期しないエラーが発生しました&lt;/div&gt;
+}</code></pre>
+
+    <h2>5-6. TanStack Query のグローバルエラーハンドリング <span class="section-tag tag-react">React</span></h2>
+
+    <pre><code>// main.tsx
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) =&gt; {
+        // 401/403はリトライしない
+        if (error.message.includes('401') || error.message.includes('403')) {
+          return false;
+        }
+        return failureCount &lt; 3;
+      },
+      staleTime: 1000 * 60,  // 1分間はキャッシュを新鮮とみなす
+    },
+    mutations: {
+      onError: (error) =&gt; {
+        toast.error(error.message);  // sonner で通知
+      },
+    },
+  },
+});</code></pre>
 
     <div class="why-box">
-      <strong>server と client の両方を設定する理由:</strong>
-      <ul style="margin-top:0.5rem">
-        <li><code>configure_server</code>: Sidekiqワーカープロセス自身がRedisからジョブを取り出す際の接続設定</li>
-        <li><code>configure_client</code>: Railsアプリ（Webプロセス）がジョブをRedisに投入する際の接続設定</li>
-      </ul>
-      Webプロセスとワーカープロセスは別プロセスなので、それぞれ独立してRedis接続を持つ。
+      <code>staleTime: 60000</code> — デフォルトではコンポーネントがマウントされるたびにAPIを再呼び出しする。1分間はキャッシュを使うことで、ページ遷移→戻る時の不要なリクエストを削減する。UXとしてもデータが即座に表示されて快適。
     </div>
 
-    <div class="file-label">backend/config/sidekiq.yml</div>
-    <pre><code>:concurrency: 5
-:queues:
-  - default
-  - mailers</code></pre>
+    <h2>5-7. レスポンシブ対応の確認ポイント</h2>
 
-    <div class="why-box">
-      <code>concurrency: 5</code> — 1つのSidekiqプロセスが同時に5つのジョブを並列実行する。開発環境ではこの程度で十分。本番ではサーバーのCPUコア数に合わせて調整する。
-    </div>
+    <ul>
+      <li><strong>Sidebar</strong>: モバイルではデフォルト非表示、ハンバーガーメニューで開閉</li>
+      <li><strong>NewsCard</strong>: グリッド表示 → モバイルでは1カラム</li>
+      <li><strong>ランディングページ</strong>: ヒーローセクションの画像サイズ調整</li>
+    </ul>
 
-    <h3>ActiveJobアダプターの設定</h3>
+    <pre><code>// Tailwindのレスポンシブ例
+&lt;div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"&gt;
+  {news.map(item =&gt; &lt;NewsCard key={item.id} {...item} /&gt;)}
+&lt;/div&gt;
 
-    <div class="file-label">backend/config/application.rb（差分追加）</div>
-    <pre><code>config.active_job.queue_adapter = :sidekiq</code></pre>
+// サイドバーの開閉（モバイル）
+&lt;aside className={cn(
+  "fixed inset-y-0 left-0 z-40 w-64 bg-background border-r transition-transform",
+  "md:static md:translate-x-0",  // デスクトップでは常に表示
+  isOpen ? "translate-x-0" : "-translate-x-full"  // モバイルでは開閉
+)}&gt;</code></pre>
 
-    <div class="why-box">
-      RailsのActiveJobはジョブ実行の抽象レイヤー。デフォルトでは <code>:async</code>（インメモリ、プロセス再起動で消失）が使われる。<code>:sidekiq</code> に変更することで、ジョブがRedisに永続化され、ワーカーが落ちても再実行される。
-    </div>
-
-    <h2>5-2. TavilyService <span class="section-tag tag-rails">Rails</span></h2>
-
-    <div class="file-label">backend/app/services/tavily_service.rb</div>
-    <pre><code>class TavilyService
-  ENDPOINT = 'https://api.tavily.com/search'
-
-  class ApiError &lt; StandardError; end
-
-  def self.search(query, max_results: 10)
-    conn = Faraday.new do |f|
-      f.request :json         # リクエストボディを自動でJSON化
-      f.response :json        # レスポンスボディを自動でパース
-      f.response :raise_error # 4xx/5xxでFaraday::Errorを発生
-      f.adapter Faraday.default_adapter
-    end
-
-    response = conn.post(ENDPOINT, {
-      api_key: ENV.fetch('TAVILY_API_KEY'),
-      query: query,
-      search_depth: 'basic',
-      include_answer: false,
-      max_results: max_results
-    })
-
-    response.body['results'].map do |result|
-      {
-        title: result['title'],
-        url: result['url'],
-        content: result['content'],
-        published_date: result['published_date']
-      }
-    end
-  rescue Faraday::Error =&gt; e
-    raise ApiError, "Tavily API error: #{e.message}"
-  end
-end</code></pre>
-
-    <div class="why-box">
-      <strong>Serviceクラスを分離する理由:</strong> 外部APIとのやり取りをコントローラーやジョブに直書きすると:
-      <ul style="margin-top:0.5rem">
-        <li>同じAPI呼び出しを複数箇所から使いたくなった時にコード重複する</li>
-        <li>テスト時にモック対象が巨大なクラスになる</li>
-        <li>APIの仕様変更時に影響範囲が散らばる</li>
-      </ul>
-      Serviceクラスに切り出すことで「Tavily APIとの対話」が1箇所に集約され、ジョブやコントローラーからは <code>TavilyService.search('React')</code> と呼ぶだけで済む。
-    </div>
-
-    <div class="why-box">
-      <strong>Faradayのミドルウェア構成:</strong>
-      <ul style="margin-top:0.5rem">
-        <li><code>f.request :json</code> — Rubyハッシュを自動でJSON文字列に変換し、Content-Typeヘッダーも設定してくれる</li>
-        <li><code>f.response :json</code> — レスポンスのJSON文字列を自動でRubyハッシュにパースしてくれる</li>
-        <li><code>f.response :raise_error</code> — HTTPステータスが4xx/5xxの時にFaraday::Errorを発生させる。これがないとエラーレスポンスも正常として返ってきてしまい、後続処理でnilエラーになる</li>
-      </ul>
-    </div>
-
-    <h2>5-3. AiSummaryService <span class="section-tag tag-rails">Rails</span></h2>
-
-    <div class="file-label">backend/app/services/ai_summary_service.rb</div>
-    <pre><code>class AiSummaryService
-  ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent'
-
-  class ApiError &lt; StandardError; end
-
-  def self.summarize(articles, keyword)
-    return [] if articles.empty?
-
-    conn = Faraday.new do |f|
-      f.request :json
-      f.response :json
-      f.adapter Faraday.default_adapter
-    end
-
-    prompt = build_prompt(articles, keyword)
-
-    response = conn.post("#{ENDPOINT}?key=#{ENV.fetch('GOOGLE_AI_API_KEY')}", {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 2048
-      }
-    })
-
-    parse_response(response.body, articles)
-  rescue Faraday::Error =&gt; e
-    raise ApiError, "Google AI API error: #{e.message}"
-  end
-
-  private_class_method
-
-  def self.build_prompt(articles, keyword)
-    articles_text = articles.map.with_index(1) do |article, i|
-      "#{i}. #{article[:title]}\n#{article[:content]&.slice(0, 500)}"
-    end.join("\n\n")
-
-    &lt;&lt;~PROMPT
-      以下のニュース記事一覧から「#{keyword}」に関連する記事を選び、
-      各記事を日本語で2-3文に要約してください。
-      関連性の低い記事は除外してください。
-
-      出力形式（JSON配列）:
-      [{"index": 1, "summary": "要約テキスト"}, ...]
-
-      記事一覧:
-      #{articles_text}
-    PROMPT
-  end
-
-  def self.parse_response(body, articles)
-    text = body.dig('candidates', 0, 'content', 'parts', 0, 'text')
-    return [] unless text
-
-    # AIの出力からJSON部分を抽出
-    json_match = text.match(/\[.*\]/m)
-    return [] unless json_match
-
-    summaries = JSON.parse(json_match[0])
-    summaries.filter_map do |summary|
-      article = articles[summary['index'] - 1]
-      next unless article
-
-      {
-        title: article[:title],
-        summary: summary['summary'],
-        url: article[:url],
-        published_at: article[:published_date]
-      }
-    end
-  rescue JSON::ParserError
-    []
-  end
-end</code></pre>
-
-    <div class="why-box">
-      <strong>temperature: 0.3 にする理由:</strong> 要約タスクでは創造性より正確性が重要。temperatureを低くすることで、AIの出力が安定し、同じ入力に対して一貫した結果が得られやすくなる。
-    </div>
-
-    <div class="why-box">
-      <strong>parse_responseでJSON抽出する理由:</strong> AIの出力は「はい、以下が結果です：[...]」のようにJSON以外のテキストを含む場合がある。正規表現で <code>[...]</code> 部分だけを抽出することで、AIの出力フォーマットのブレに対応する。パースに失敗した場合は空配列を返し、ジョブ全体が失敗しないようにする。
-    </div>
-
-    <h2>5-4. FetchNewsJob <span class="section-tag tag-rails">Rails</span></h2>
-
-    <div class="file-label">backend/app/jobs/fetch_news_job.rb</div>
-    <pre><code>class FetchNewsJob &lt; ApplicationJob
-  queue_as :default
-
-  retry_on TavilyService::ApiError, wait: :polynomially_longer, attempts: 3
-  retry_on AiSummaryService::ApiError, wait: 30.seconds, attempts: 2
-  discard_on ActiveRecord::RecordNotFound
-
-  def perform(interest_id)
-    interest = Interest.find(interest_id)
-    user = interest.user
-
-    # 1. Tavily APIでニュース検索
-    articles = TavilyService.search(interest.keyword)
-    Rails.logger.info "[FetchNewsJob] Found #{articles.size} articles for '#{interest.keyword}'"
-
-    # 2. Google AIで要約・フィルタリング
-    summarized = AiSummaryService.summarize(articles, interest.keyword)
-    Rails.logger.info "[FetchNewsJob] AI summarized #{summarized.size} articles"
-
-    # 3. DBに保存（重複チェック付き）
-    saved_count = 0
-    summarized.each do |article|
-      next if user.news.exists?(url: article[:url])
-
-      user.news.create!(
-        title: article[:title],
-        text: article[:summary],
-        url: article[:url],
-        tag: interest.keyword,
-        published_at: article[:published_at]
-      )
-      saved_count += 1
-    end
-
-    Rails.logger.info "[FetchNewsJob] Saved #{saved_count} new articles for '#{interest.keyword}'"
-  end
-end</code></pre>
-
-    <div class="why-box">
-      <strong><code>retry_on</code> の使い分け:</strong>
-      <ul style="margin-top:0.5rem">
-        <li>Tavily API: <code>polynomially_longer</code> — リトライ間隔を指数的に増やす（例: 3秒→18秒→83秒）。外部APIの一時的な過負荷を考慮し、すぐにリトライせず待つ</li>
-        <li>Google AI: 固定30秒待ち、2回まで。レート制限に引っかかった場合を想定</li>
-      </ul>
-    </div>
-
-    <div class="why-box">
-      <strong><code>discard_on ActiveRecord::RecordNotFound</code></strong> — ジョブ実行時にInterestが既に削除されていた場合、リトライせずジョブを破棄する。ユーザーがInterestを作成後すぐ削除した場合に、存在しないレコードのためにリトライし続けるのは無駄。
-    </div>
-
-    <div class="why-box">
-      <strong>URL重複チェック <code>next if user.news.exists?(url: article[:url])</code></strong> — 同じニュース記事が複数回保存されるのを防ぐ。ジョブが失敗→リトライした場合や、定期実行で同じ記事が返ってきた場合に重複を避ける。
-    </div>
-
-    <h3>Interestコントローラーからジョブをキック</h3>
-
-    <div class="file-label">backend/app/controllers/api/v1/interests_controller.rb（差分）</div>
-    <pre><code>def create
-  interest = current_user.interests.build(interest_params)
-
-  if interest.save
-    FetchNewsJob.perform_later(interest.id)  # ← 追加: 非同期でニュース取得
-    render json: interest_response(interest), status: :created
-  else
-    render json: { errors: interest.errors.full_messages }, status: :unprocessable_entity
-  end
-end</code></pre>
-
-    <div class="why-box">
-      <strong><code>perform_later</code> vs <code>perform_now</code>:</strong>
-      <ul style="margin-top:0.5rem">
-        <li><code>perform_later</code>: Redisにジョブを投入してすぐAPIレスポンスを返す。ユーザーは待たされない</li>
-        <li><code>perform_now</code>: その場で同期実行。外部API呼び出しに数秒かかるとユーザーがその間待つことになる</li>
-      </ul>
-      ニュース取得は数秒〜十数秒かかるため、非同期が必須。ユーザーにはInterest登録成功をすぐ返し、ニュースはバックグラウンドで集まっていく。
-    </div>
-
-    <h2>5-5. Sidekiqの起動と確認 <span class="section-tag tag-rails">Rails</span></h2>
-
-    <pre><code># ターミナル1: Rails server
-rails s -p 3000
-
-# ターミナル2: Sidekiq worker
-bundle exec sidekiq
-
-# Sidekiqの起動ログに以下が表示されればOK:
-# Sidekiq 7.x.x starting
-# Running in ruby ...
-# Concurrency: 5</code></pre>
-
-    <h3>Sidekiq Web UI（開発用）</h3>
-
-    <div class="file-label">backend/config/routes.rb（差分追加）</div>
-    <pre><code>require 'sidekiq/web'
-
-Rails.application.routes.draw do
-  mount Sidekiq::Web =&gt; '/sidekiq'  # 開発環境のみ。本番では認証をかける
-  # ...
-end</code></pre>
-
-    <p>ブラウザで <code>http://localhost:3000/sidekiq</code> を開くと、キュー状況・実行中ジョブ・失敗ジョブを確認できる。</p>
-
-    <div class="warn-box">
-      本番環境では Sidekiq Web UI に認証をかけること。誰でもアクセスできるとジョブの内容やRedisの状態が漏洩する。本番ではルーティングで <code>authenticate :admin_user</code> などの制約をかける。
-    </div>
-
-    <h2>5-6. 定期実行（sidekiq-scheduler）<span class="section-tag tag-rails">Rails</span></h2>
-
-    <p>登録済みの全Interestに対して定期的にニュースを取得する場合:</p>
-
-    <div class="file-label">backend/config/sidekiq.yml（追加）</div>
-    <pre><code>:schedule:
-  fetch_all_news:
-    cron: '0 */6 * * *'   # 6時間ごと
-    class: FetchAllNewsJob
-    description: '全Interest対象のニュース取得'</code></pre>
-
-    <div class="file-label">backend/app/jobs/fetch_all_news_job.rb</div>
-    <pre><code>class FetchAllNewsJob &lt; ApplicationJob
-  queue_as :default
-
-  def perform
-    Interest.find_each do |interest|
-      FetchNewsJob.perform_later(interest.id)
-    end
-  end
-end</code></pre>
-
-    <div class="why-box">
-      <strong><code>find_each</code> を使う理由:</strong> <code>Interest.all.each</code> は全レコードを一度にメモリに読み込む。数千件になるとメモリを圧迫する。<code>find_each</code> は1000件ずつバッチで読み込み、メモリ使用量を一定に保つ。<br><br>
-      各InterestごとにFetchNewsJobを個別にキューに入れることで、1つのInterestのジョブが失敗しても他に影響しない。並列実行もされるので全体の処理時間が短縮される。
-    </div>
-
-    <h2>5-7. 動作確認チェックリスト</h2>
+    <h2>5-8. 動作確認チェックリスト</h2>
     <ol>
-      <li>Redisが起動している（<code>redis-cli ping</code> → PONG）</li>
-      <li>Sidekiqワーカーが起動している（ログにStartingが出る）</li>
-      <li>Interest作成 → Sidekiq Web UIにジョブが表示される</li>
-      <li>ジョブ完了後、<code>/api/v1/news</code> にニュースが入っている</li>
-      <li>同じURLの記事が重複して保存されていない</li>
-      <li>Tavily APIキーが無効 → ジョブがリトライされる（Sidekiq UIで確認）</li>
+      <li>ランディングページが正しく表示される（画像・リンク・レイアウト）</li>
+      <li><code>next/image</code> や <code>next/link</code> のimportエラーが出ない</li>
+      <li>全ページのルーティングが正しく動作する</li>
+      <li>認証フローが一通り動く（サインアップ→ログイン→ダッシュボード→ログアウト）</li>
+      <li>API エラー時にtoast通知が表示される</li>
+      <li>モバイル表示でサイドバーが正しく開閉する</li>
+      <li><code>npm run build</code> がエラーなく完了する</li>
+      <li><code>OPENAPI=1 bundle exec rspec</code> でOpenAPI仕様書が最新化され、<code>npm run generate:api</code> で型エラーが出ない</li>
     </ol>
-
-    <div class="tip-box">
-      開発中にAPIキーがなくてもテストしたい場合、<code>TavilyService.search</code> をモックしたテストデータを返すようにすると良い。<code>Rails.env.development?</code> でフェイクデータを返す分岐を入れるか、RSpecで <code>allow(TavilyService).to receive(:search).and_return([...])</code> する。
-    </div>
 
     <div class="nav-footer">
       <a href="step4-news-dashboard.html">← Step 4: ニュース & ダッシュボード</a>
-      <a href="step6-landing-and-polish.html">Step 6: ランディングページ & 仕上げ →</a>
+      <a href="step6-landing-and-polish.html">Step 6: 定期実行（Solid Queue） →</a>
     </div>
   </div>
 </body>

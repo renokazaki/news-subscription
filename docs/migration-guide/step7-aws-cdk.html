@@ -51,7 +51,7 @@
 
     <div class="goal-box">
       <h3>このStepのゴール</h3>
-      <p><code>cdk deploy</code> 一発でVPC・RDS・ElastiCache・ECS Fargate・ALB・S3・CloudFrontが構築され、アプリが動作する。<code>cdk destroy</code> で全リソースをクリーンに削除できる。</p>
+      <p><code>cdk deploy</code> 一発でVPC・RDS・ECS Fargate・ALB・S3・CloudFrontが構築され、アプリが動作する。<code>cdk destroy</code> で全リソースをクリーンに削除できる。Solid QueueはRDBをキューとして使うため、ElastiCache（Redis）は不要。</p>
     </div>
 
     <h2>全体アーキテクチャ</h2>
@@ -77,20 +77,20 @@
 │                                             │                           │
 │   ┌─────────────────────┐    ┌──────────────▼──────────┐               │
 │   │ ECS Fargate         │    │ ECS Fargate             │               │
-│   │ (Rails API - Web)   │    │ (Sidekiq Worker)        │               │
+│   │ (Rails API - Web)   │    │ (Solid Queue Worker)    │               │
 │   └──────────┬──────────┘    └──────────────┬──────────┘               │
 │              │                              │                           │
 │              ▼                              ▼                           │
-│   ┌────────────────────┐    ┌─────────────────────────┐                │
-│   │ RDS PostgreSQL     │    │ ElastiCache Redis       │                │
-│   │ (db.t3.micro)      │    │ (cache.t3.micro)        │                │
-│   └────────────────────┘    └─────────────────────────┘                │
+│   ┌──────────────────────────────────────────────────┐                 │
+│   │ RDS PostgreSQL (db.t3.micro)                     │                 │
+│   │ ※ Solid Queue はDBをキューとして使うためRedis不要  │                 │
+│   └──────────────────────────────────────────────────┘                 │
 └─────────────────────────────────────────────────────────────────────────┘</div>
 
     <div class="cost-box">
       この構成の検証用コスト（東京リージョン、概算）:<br>
-      RDS db.t3.micro: ~$15/月, ElastiCache cache.t3.micro: ~$12/月, ECS Fargate: ~$30/月（0.25vCPU x 2タスク）, NAT Gateway: ~$33/月, ALB: ~$16/月<br>
-      <strong>合計: 約$100-120/月</strong>。検証後は <code>cdk destroy</code> で即座に0円にできる。
+      RDS db.t3.micro: ~$15/月, ECS Fargate: ~$30/月（0.25vCPU x 2タスク）, NAT Gateway: ~$33/月, ALB: ~$16/月<br>
+      <strong>合計: 約$90-100/月</strong>。Solid Queue採用によりElastiCache（Redis）が不要になり、約$12/月削減。検証後は <code>cdk destroy</code> で即座に0円にできる。
     </div>
 
     <h2>7-1. 前提条件 <span class="section-tag tag-aws">AWS</span></h2>
@@ -152,7 +152,6 @@ const backend = new BackendStack(app, 'NewsPicker-Backend', {
   env,
   vpc: vpc.vpc,
   database: database.dbInstance,
-  redis: database.redisCluster,
 });
 new FrontendStack(app, 'NewsPicker-Frontend', {
   env,
@@ -219,7 +218,6 @@ export class VpcStack extends cdk.Stack {
     <pre><code>import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import { Construct } from 'constructs';
 
 interface DatabaseStackProps extends cdk.StackProps {
@@ -228,9 +226,7 @@ interface DatabaseStackProps extends cdk.StackProps {
 
 export class DatabaseStack extends cdk.Stack {
   public readonly dbInstance: rds.DatabaseInstance;
-  public readonly redisCluster: elasticache.CfnCacheCluster;
   public readonly dbSecurityGroup: ec2.SecurityGroup;
-  public readonly redisSecurityGroup: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
@@ -264,28 +260,6 @@ export class DatabaseStack extends cdk.Stack {
       deleteProtection: false, // cdk destroy で削除可能にする
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-
-    // ===== ElastiCache Redis =====
-    this.redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSg', {
-      vpc,
-      description: 'Security group for ElastiCache Redis',
-      allowAllOutbound: false,
-    });
-
-    const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
-      description: 'Subnet group for Redis',
-      subnetIds: vpc.selectSubnets({
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      }).subnetIds,
-    });
-
-    this.redisCluster = new elasticache.CfnCacheCluster(this, 'Redis', {
-      engine: 'redis',
-      cacheNodeType: 'cache.t3.micro',
-      numCacheNodes: 1,
-      vpcSecurityGroupIds: [this.redisSecurityGroup.securityGroupId],
-      cacheSubnetGroupName: redisSubnetGroup.ref,
-    });
   }
 }</code></pre>
 
@@ -298,7 +272,7 @@ export class DatabaseStack extends cdk.Stack {
     </div>
 
     <div class="why-box">
-      <strong>SecurityGroupを分ける理由:</strong> DB用とRedis用のセキュリティグループを別にすることで、「ECS → DB」は5432番ポートのみ許可、「ECS → Redis」は6379番ポートのみ許可と、最小権限の原則を適用できる。
+      <strong>Solid QueueによりElastiCache（Redis）が不要:</strong> 従来Sidekiqを使う構成ではElastiCacheが必要だったが、Solid Queueは同じRDS（PostgreSQL）をジョブキューとして使う。インフラ構成がシンプルになり、月額約$12のコスト削減にもなる。
     </div>
 
     <h2>7-5. バックエンドスタック（ECS Fargate + ALB） <span class="section-tag tag-aws">AWS</span></h2>
@@ -309,14 +283,12 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 interface BackendStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
   database: rds.DatabaseInstance;
-  redis: elasticache.CfnCacheCluster;
 }
 
 export class BackendStack extends cdk.Stack {
@@ -325,7 +297,7 @@ export class BackendStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BackendStackProps) {
     super(scope, id, props);
 
-    const { vpc, database, redis } = props;
+    const { vpc, database } = props;
 
     // ECS Cluster
     const cluster = new ecs.Cluster(this, 'Cluster', { vpc });
@@ -345,7 +317,6 @@ export class BackendStack extends cdk.Stack {
       environment: {
         RAILS_ENV: 'production',
         RAILS_LOG_TO_STDOUT: 'true',
-        REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}/0`,
       },
       secrets: {
         DATABASE_URL: ecs.Secret.fromSecretsManager(
@@ -376,28 +347,27 @@ export class BackendStack extends cdk.Stack {
       healthyHttpCodes: '200',
     });
 
-    // タスク定義（Sidekiq Worker）
+    // タスク定義（Solid Queue Worker）
     const workerTaskDef = new ecs.FargateTaskDefinition(this, 'WorkerTaskDef', {
       memoryLimitMiB: 512,
       cpu: 256,
     });
 
-    workerTaskDef.addContainer('sidekiq', {
+    workerTaskDef.addContainer('solid-queue', {
       image: ecs.ContainerImage.fromAsset('../backend'),
       logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'sidekiq',
+        streamPrefix: 'solid-queue',
         logRetention: logs.RetentionDays.ONE_WEEK,
       }),
       environment: {
         RAILS_ENV: 'production',
-        REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}/0`,
       },
       secrets: {
         DATABASE_URL: ecs.Secret.fromSecretsManager(
           database.secret!, 'host'
         ),
       },
-      command: ['bundle', 'exec', 'sidekiq'],
+      command: ['bin/jobs'],
     });
 
     const workerService = new ecs.FargateService(this, 'WorkerService', {
@@ -426,7 +396,7 @@ export class BackendStack extends cdk.Stack {
     </div>
 
     <div class="why-box">
-      <strong>WebとWorkerを分ける理由:</strong> Rails API（HTTP受付）とSidekiq（バックグラウンドジョブ）は異なるプロセスだが、同じコードベース（Dockerイメージ）を使う。<code>command</code> を変えるだけで同一イメージから異なるプロセスを起動する。<br><br>
+      <strong>WebとWorkerを分ける理由:</strong> Rails API（HTTP受付）とSolid Queue（定期ジョブ実行）は異なるプロセスだが、同じコードベース（Dockerイメージ）を使う。<code>command</code> を変えるだけで同一イメージから異なるプロセスを起動する。Solid QueueはRedis不要で、同じRDS（PostgreSQL）をキューとして使う。<br><br>
       分離のメリット:
       <ul style="margin-top:0.5rem">
         <li>WebとWorkerを独立にスケールできる（APIアクセスが増えたらWebだけ増やす）</li>
@@ -638,13 +608,13 @@ aws cloudformation list-stacks --query "StackSummaries[?starts_with(StackName, '
       <li>CloudFront URL でReact SPAが表示される</li>
       <li><code>/api/v1/health</code> がCloudFront経由で200を返す</li>
       <li>サインアップ・ログインが動作する</li>
-      <li>Interest作成 → Sidekiqでジョブ実行 → ニュースが表示される</li>
+      <li>Solid Queueの定期実行でニュースが収集・表示される</li>
       <li><code>cdk destroy --all</code> で全リソースが削除される</li>
       <li>AWSコンソールでリソースが残っていないことを確認</li>
     </ol>
 
     <div class="nav-footer">
-      <a href="step6-landing-and-polish.html">← Step 6: ランディングページ & 仕上げ</a>
+      <a href="step6-landing-and-polish.html">← Step 6: 定期実行（Solid Queue）</a>
       <a href="index.html">ガイド一覧に戻る →</a>
     </div>
   </div>
