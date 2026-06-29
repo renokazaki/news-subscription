@@ -480,17 +480,107 @@ end</code></pre>
       <strong>parse_responseでJSON抽出する理由:</strong> AIの出力は「はい、以下が結果です：[...]」のようにJSON以外のテキストを含む場合がある。正規表現で <code>[...]</code> 部分だけを抽出することで、AIの出力フォーマットのブレに対応する。パースに失敗した場合は空配列を返し、ジョブ全体が失敗しないようにする。
     </div>
 
-    <!-- ===== 6-8. Solid Queue の起動 ===== -->
-    <h2>6-8. Solid Queue の起動と確認 <span class="section-tag tag-rails">Rails</span></h2>
+    <!-- ===== 6-8. 環境変数の設定 ===== -->
+    <h2>6-8. 環境変数の設定 <span class="section-tag tag-rails">Rails</span></h2>
 
-    <pre><code># ターミナル1: Rails server
+    <div class="file-label">backend/.env</div>
+    <pre><code>DEVISE_JWT_SECRET_KEY=xxxxx     # Step 3 で設定済み
+TAVILY_API_KEY=tvly-dev-xxxxx   # Tavily API キー（https://tavily.com で取得）
+GOOGLE_AI_API_KEY=AIzaSyxxxxx   # Google AI API キー（https://aistudio.google.com で取得）</code></pre>
+
+    <div class="warn-box">
+      <strong>APIキーがないとジョブは失敗します。</strong><br>
+      <ul style="margin-top:0.5rem">
+        <li><strong>Tavily API:</strong> <a href="https://tavily.com" style="color:var(--accent)">tavily.com</a> でアカウント作成 → APIキーを取得（月1,000リクエスト無料）</li>
+        <li><strong>Google AI:</strong> <a href="https://aistudio.google.com" style="color:var(--accent)">aistudio.google.com</a> でAPIキーを取得（無料枠あり、モデルにより制限が異なる）</li>
+      </ul>
+    </div>
+
+    <div class="tip-box">
+      <strong>Gemini モデルの選択について:</strong><br>
+      <code>gemini-pro</code> や <code>gemini-2.0-flash</code> は無料枠のクォータ制限に引っかかる場合がある（429 Too Many Requests）。
+      その場合は <code>gemini-3.1-flash-lite-preview</code> など別のモデルに変更する。<br><br>
+      変更箇所は <code>app/services/ai_summary_service.rb</code> の <code>ENDPOINT</code> 定数のモデル名部分のみ。
+    </div>
+
+    <!-- ===== 6-9. Solid Queue の起動 ===== -->
+    <h2>6-9. Solid Queue の起動と確認 <span class="section-tag tag-rails">Rails</span></h2>
+
+    <h3>ローカル開発環境での起動</h3>
+
+    <p>ターミナルを <strong>3つ</strong> 開いて、それぞれ以下を実行する:</p>
+
+    <pre><code># ターミナル1: Rails APIサーバー
+cd backend
 bin/rails s -p 3000
 
-# ターミナル2: Solid Queue worker
-bin/jobs</code></pre>
+# ターミナル2: Solid Queue ワーカー
+cd backend
+bin/jobs                    # macOS / Linux
+# または（Windows の場合）:
+set SOLID_QUEUE_SUPERVISOR_MODE=async
+bundle exec rake solid_queue:start
+
+# ターミナル3: フロントエンド（必要に応じて）
+cd frontend
+npm run dev</code></pre>
+
+    <div class="warn-box">
+      <strong>Windows 固有の制約:</strong><br>
+      Solid Queue はデフォルトで <code>fork()</code> を使ってプロセスを分離するが、Windows は <code>fork()</code> をサポートしていない。そのため Windows では <code>SOLID_QUEUE_SUPERVISOR_MODE=async</code> を指定して、全コンポーネント（Supervisor, Dispatcher, Scheduler, Worker）を単一プロセスで動かす。<br><br>
+      また <code>SIGQUIT</code> シグナルも未サポートのため、<code>config/initializers/solid_queue_windows.rb</code> で回避パッチを適用している。<br><br>
+      <strong>macOS / Linux ではこの制約は発生しない。</strong><code>bin/jobs</code> でそのまま起動できる。
+    </div>
 
     <div class="why-box">
-      <code>bin/jobs</code> は Solid Queue のワーカープロセスを起動するコマンド。dispatcher（定期実行のトリガー）と worker（ジョブの実行）の両方を1プロセスで動かす。Sidekiq と違い、Redis の起動確認は不要。
+      <code>bin/jobs</code> は Solid Queue のワーカープロセスを起動するコマンド。dispatcher（定期実行のトリガー）と worker（ジョブの実行）の両方を動かす。Sidekiq と違い、Redis の起動確認は不要。
+    </div>
+
+    <h3>環境ごとの定期実行の挙動</h3>
+
+    <table style="width:100%; border-collapse:collapse; margin:1rem 0; font-size:0.85rem;">
+      <thead>
+        <tr>
+          <th style="padding:0.75rem; text-align:left; border:1px solid var(--border); background:var(--surface); color:var(--accent);"></th>
+          <th style="padding:0.75rem; text-align:left; border:1px solid var(--border); background:var(--surface); color:var(--accent);">ローカル（development）</th>
+          <th style="padding:0.75rem; text-align:left; border:1px solid var(--border); background:var(--surface); color:var(--accent);">AWS（production）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><strong>実行間隔</strong></td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);">30分ごと</td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);">6時間ごと</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><strong>定期実行の前提</strong></td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><code>bin/jobs</code> プロセスが起動中であること</td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);">ECS ワーカータスクが起動中であること</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><strong>止めたら？</strong></td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);">ターミナルを閉じたら停止。再起動で再開</td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);">ECS がタスクを自動復旧するため、実質止まらない</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><strong>止まっていた間のジョブ</strong></td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);" colspan="2">ジョブは DB に残る。ワーカー再起動時に溜まったジョブが順番に処理される。データ損失なし</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><strong>起動コマンド</strong></td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);"><code>bin/jobs</code><br>（Windows: <code>set SOLID_QUEUE_SUPERVISOR_MODE=async &amp;&amp; bundle exec rake solid_queue:start</code>）</td>
+          <td style="padding:0.75rem; border:1px solid var(--border); background:var(--code-bg);">ECS タスク定義で <code>command: ['bin/jobs']</code>（同じDockerイメージ、起動コマンドだけ変える）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      <strong>要するに:</strong><br>
+      <ul style="margin-top:0.5rem">
+        <li><strong>ローカル:</strong> <code>bin/jobs</code> を起動したまま放置すれば、30分ごとに自動でニュース収集が行われる</li>
+        <li><strong>AWS:</strong> デプロイ後は ECS がワーカーを常時起動しているので、放置で6時間ごとに自動でニュース収集が行われる</li>
+      </ul>
+      どちらも <strong>Solid Queue ワーカープロセスが生きていること</strong> が唯一の前提条件。
     </div>
 
     <h3>手動でジョブを実行して確認</h3>
@@ -498,37 +588,69 @@ bin/jobs</code></pre>
     <pre><code># Rails consoleから手動でジョブを実行
 bin/rails console
 
-# 1件だけテスト実行
-interest = Interest.first
-FetchNewsJob.perform_later(interest.id)
+# 1. Tavily API の疎通確認（ジョブを経由せず直接呼ぶ）
+results = TavilyService.search('React', max_results: 3)
+# => [{title: "React ...", url: "...", ...}, ...]
 
-# 全件テスト実行
+# 2. AI 要約の疎通確認
+summarized = AiSummaryService.summarize(results, 'React')
+# => [{title: "...", summary: "...", url: "...", ...}, ...]
+
+# 3. ジョブを1件だけテスト実行（perform_now = その場で即実行）
+interest = Interest.first
+FetchNewsJob.perform_now(interest.id)
+
+# 4. 全件テスト実行（perform_later = キューに入れてワーカーが実行）
 FetchAllNewsJob.perform_later</code></pre>
 
-    <h3>ジョブ状態の確認（Rails console）</h3>
+    <div class="tip-box">
+      <strong>perform_now と perform_later の使い分け:</strong><br>
+      動作確認では <code>perform_now</code>（その場で実行）が便利。<code>perform_later</code> はキューに入れるだけなので、<code>bin/jobs</code> が起動していないと実行されない。
+    </div>
 
-    <pre><code># 失敗したジョブを確認
+    <h3>ワーカーの状態確認（Rails console）</h3>
+
+    <pre><code># Solid Queue のプロセスが動いているか確認
+SolidQueue::Process.all.each do |p|
+  puts "#{p.kind} - pid: #{p.pid} - heartbeat: #{p.last_heartbeat_at}"
+end
+# => Supervisor(async) - pid: 26224 - heartbeat: 2026-06-29 15:54:52 UTC
+# => Dispatcher        - pid: 26224 - heartbeat: 2026-06-29 15:54:53 UTC
+# => Scheduler         - pid: 26224 - heartbeat: 2026-06-29 15:54:53 UTC
+# => Worker            - pid: 26224 - heartbeat: 2026-06-29 15:54:53 UTC
+
+# 定期実行タスクの登録状態を確認
+SolidQueue::RecurringTask.all
+# => fetch_all_news: FetchAllNewsJob - schedule: every 30 minutes
+
+# 最近のジョブ実行履歴
+SolidQueue::Job.order(created_at: :desc).limit(5).each do |j|
+  puts "#{j.class_name} - created: #{j.created_at} - finished: #{j.finished_at}"
+end
+
+# 失敗したジョブを確認
 SolidQueue::FailedExecution.all
 
 # 待機中のジョブを確認
-SolidQueue::ReadyExecution.all
-
-# 定期実行タスクの状態を確認
-SolidQueue::RecurringTask.all</code></pre>
+SolidQueue::ReadyExecution.all</code></pre>
 
     <div class="tip-box">
       <strong>mission_control-jobs について:</strong> Solid Queue のWeb UIとして <code>mission_control-jobs</code> gem がありますが、API-only モードの Rails では Sprockets（アセットパイプライン）が必要になるため使用できません。Rails console からの確認で代替します。
     </div>
 
-    <!-- ===== 6-9. チェックリスト ===== -->
-    <h2>6-9. 動作確認チェックリスト</h2>
+    <!-- ===== 6-10. チェックリスト ===== -->
+    <h2>6-10. 動作確認チェックリスト</h2>
     <ol>
-      <li><code>bin/jobs</code> でSolid Queueワーカーが起動する</li>
-      <li>Rails consoleから <code>FetchNewsJob.perform_later(interest.id)</code> でジョブが実行される</li>
-      <li>ジョブ完了後、<code>/api/v1/news</code> にニュースが入っている</li>
-      <li>同じURLの記事が重複して保存されていない</li>
-      <li>Tavily APIキーが無効 → ジョブがリトライされる（管理UIまたはログで確認）</li>
-      <li>定期実行の設定が反映されている（管理UIで recurring tasks を確認）</li>
+      <li><code>.env</code> に <code>TAVILY_API_KEY</code> と <code>GOOGLE_AI_API_KEY</code> を設定済み</li>
+      <li>Rails console で <code>TavilyService.search('React')</code> が結果を返す</li>
+      <li>Rails console で <code>AiSummaryService.summarize(articles, 'React')</code> が要約を返す</li>
+      <li><code>bin/jobs</code>（またはWindows用コマンド）でSolid Queueワーカーが起動する</li>
+      <li><code>SolidQueue::Process.all</code> で Supervisor, Dispatcher, Scheduler, Worker の4プロセスが表示される</li>
+      <li><code>SolidQueue::RecurringTask.all</code> で <code>fetch_all_news</code> が登録されている</li>
+      <li>Rails consoleから <code>FetchNewsJob.perform_now(interest.id)</code> でニュースがDB保存される</li>
+      <li><code>/api/v1/news</code> API でニュースが返ってくる</li>
+      <li>同じURLの記事が重複して保存されていない（2回実行しても件数が増えない）</li>
+      <li>ワーカーを起動したまま30分放置 → 自動でニュース収集が実行される</li>
       <li><code>Interest.destroy</code> 後にジョブが走っても <code>RecordNotFound</code> で安全に破棄される</li>
     </ol>
 

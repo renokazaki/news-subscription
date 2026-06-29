@@ -168,11 +168,60 @@
       別プロセス（bin/jobs）がジョブを実行することで、Railsサーバーは常にレスポンスを返すことに集中できる。
     </div>
 
+    <h3>起動モード: fork と async</h3>
+
+    <p>Solid Queue には2つの起動モードがあります:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>モード</th>
+          <th>仕組み</th>
+          <th>使う場面</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>fork</strong>（デフォルト）</td>
+          <td>Supervisor が子プロセスを <code>fork()</code> で生成。Dispatcher, Worker が別プロセスで動く</td>
+          <td>macOS / Linux（本番含む）</td>
+        </tr>
+        <tr>
+          <td><strong>async</strong></td>
+          <td>全コンポーネントが同一プロセス内のスレッドで動く。<code>fork()</code> 不要</td>
+          <td>Windows（<code>fork()</code> 未サポートのため）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      <strong>Windows で <code>bin/jobs</code> が動かない理由:</strong><br>
+      <code>fork()</code> は Unix 系OS の機能で、プロセスを複製する。Windows にはこの機能がないため、<code>NotImplementedError: fork() function is unimplemented</code> エラーになる。<br><br>
+      また <code>SIGQUIT</code> シグナルも Windows にはないため、別途 <code>config/initializers/solid_queue_windows.rb</code> で <code>INT</code> と <code>TERM</code> のみに制限するパッチを当てている。
+    </div>
+
+    <h3>開発時の起動コマンド</h3>
+
+    <pre><code># macOS / Linux:
+# ターミナル1
+bin/rails s -p 3000
+
+# ターミナル2
+bin/jobs
+
+# ─────────────────────────────────
+
+# Windows:
+# ターミナル1
+bin/rails s -p 3000
+
+# ターミナル2
+set SOLID_QUEUE_SUPERVISOR_MODE=async
+bundle exec rake solid_queue:start</code></pre>
+
     <div class="tip-box">
-      <strong>開発時の起動コマンド:</strong><br>
-      ターミナル1: <code>bin/rails s -p 3000</code>（Rails サーバー）<br>
-      ターミナル2: <code>bin/jobs</code>（Solid Queue ワーカー）<br><br>
-      両方を起動しないと定期実行は動きません。
+      <strong>両方を起動しないと定期実行は動きません。</strong><br>
+      Rails サーバーだけではジョブの「登録」はできるが「実行」はされない。ワーカー（bin/jobs）が実行を担当する。
     </div>
 
     <!-- ===== 4. 定期実行のしくみ ===== -->
@@ -500,6 +549,172 @@ expect { FetchNewsJob.perform_now(interest.id) }.to change(News, :count).by(1)</
         ECS（AWS）の場合、Railsサーバー用タスクとは別に、<code>command: ['bin/jobs']</code> のタスク定義を作成します。同じDockerイメージから起動コマンドだけ変えるパターンです。Step 7 で詳しく解説します。
       </div>
     </div>
+
+    <!-- ===== 12. 環境ごとの挙動 ===== -->
+    <h2>12. ローカル vs AWS: 定期実行はどう動くか</h2>
+
+    <p>「ワーカーを起動したら放置で定期実行されるのか？」をクリアにします。</p>
+
+    <div class="flow-diagram">
+ローカル（development）                    AWS（production）
+┌─────────────────────────────┐           ┌─────────────────────────────┐
+│ ターミナル1: bin/rails s    │           │ ECSタスク1: bin/rails s     │
+│ ターミナル2: bin/jobs       │           │ ECSタスク2: bin/jobs        │
+│                             │           │ （同じDockerイメージ、      │
+│ → 30分ごとに自動実行       │           │   起動コマンドだけ違う）    │
+│ → ターミナルを閉じたら停止 │           │                             │
+│ → 再起動で再開             │           │ → 6時間ごとに自動実行      │
+└─────────────────────────────┘           │ → ECSが自動復旧するため    │
+                                          │   実質止まらない            │
+                                          └─────────────────────────────┘</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>ローカル（development）</th>
+          <th>AWS（production）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>実行間隔</strong></td>
+          <td>30分ごと</td>
+          <td>6時間ごと</td>
+        </tr>
+        <tr>
+          <td><strong>前提条件</strong></td>
+          <td><code>bin/jobs</code> が起動中</td>
+          <td>ECS ワーカータスクが起動中</td>
+        </tr>
+        <tr>
+          <td><strong>止めたら？</strong></td>
+          <td>ターミナルを閉じたら停止</td>
+          <td>ECS が自動復旧（止まらない）</td>
+        </tr>
+        <tr>
+          <td><strong>止まっていた間のジョブ</strong></td>
+          <td colspan="2">DB に残る。ワーカー再起動時に順番に処理。データ損失なし</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      <strong>設定の根拠:</strong><br>
+      <code>config/recurring.yml</code> が環境ごとにセクション分けされているため、<code>RAILS_ENV</code> に応じて自動的にスケジュールが切り替わる。コードの変更は一切不要。
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">Q: ローカルでPC をシャットダウンしたらジョブは消える？</div>
+      <div class="qa-a">
+        消えません。ジョブは PostgreSQL のテーブルに保存されているため、PCを再起動しても残っています。<code>bin/jobs</code> を再度起動すれば、溜まっていたジョブが処理されます。ただし定期実行のスケジュール自体はワーカー起動中しか動かないため、シャットダウン中に「本来実行されるはずだった」定期実行は発火しません（次回のスケジュールタイミングで実行されます）。
+      </div>
+    </div>
+
+    <!-- ===== 13. ワーカーの状態確認 ===== -->
+    <h2>13. ワーカーが動いているか確認する方法</h2>
+
+    <p>「ちゃんとワーカーが起動しているか？」「定期タスクが登録されているか？」を Rails console から確認できます。</p>
+
+    <h3>プロセスの確認</h3>
+
+    <pre><code>bin/rails console
+
+# ワーカープロセスの一覧（heartbeat が最近なら生きている）
+SolidQueue::Process.all.each do |p|
+  puts "#{p.kind} - pid: #{p.pid} - heartbeat: #{p.last_heartbeat_at}"
+end</code></pre>
+
+    <p>正常な場合、以下の4つが表示される:</p>
+
+    <div class="flow-diagram">
+Supervisor(async) - pid: 26224 - heartbeat: 2026-06-29 15:54:52 UTC
+Dispatcher        - pid: 26224 - heartbeat: 2026-06-29 15:54:53 UTC
+Scheduler         - pid: 26224 - heartbeat: 2026-06-29 15:54:53 UTC
+Worker            - pid: 26224 - heartbeat: 2026-06-29 15:54:53 UTC</div>
+
+    <div class="qa">
+      <div class="qa-q">Q: 4つとも同じ PID なのはなぜ？</div>
+      <div class="qa-a">
+        <code>async</code> モード（Windows）では全コンポーネントが1つのプロセス内のスレッドで動くため、PID が同じになる。<code>fork</code> モード（macOS/Linux）では Dispatcher と Worker が別PID になる。機能的な違いはない。
+      </div>
+    </div>
+
+    <h3>定期タスクの確認</h3>
+
+    <pre><code># recurring.yml で定義したタスクが登録されているか
+SolidQueue::RecurringTask.all
+# => fetch_all_news: FetchAllNewsJob - schedule: every 30 minutes</code></pre>
+
+    <h3>ジョブ実行履歴の確認</h3>
+
+    <pre><code># 最近のジョブ一覧（finished_at があれば完了）
+SolidQueue::Job.order(created_at: :desc).limit(10).each do |j|
+  status = j.finished_at ? "✅ 完了" : "⏳ 実行中/待機"
+  puts "#{j.class_name} - #{status} - created: #{j.created_at}"
+end
+
+# 失敗したジョブ（エラー内容も確認可能）
+SolidQueue::FailedExecution.all.each do |f|
+  puts "#{f.job.class_name} - error: #{f.error['message']}"
+end</code></pre>
+
+    <!-- ===== 14. 外部APIのトラブルシューティング ===== -->
+    <h2>14. 外部APIのトラブルシューティング</h2>
+
+    <p>ジョブが失敗する場合、まず外部APIが正常に応答するか、ジョブを通さず直接確認する。</p>
+
+    <pre><code>bin/rails console
+
+# 1. Tavily API のテスト
+TavilyService.search('React', max_results: 3)
+# 成功 → [{title: "...", url: "...", ...}, ...]
+# 失敗 → TavilyService::ApiError: Tavily API error: ...
+
+# 2. Google AI API のテスト
+articles = TavilyService.search('React', max_results: 3)
+AiSummaryService.summarize(articles, 'React')
+# 成功 → [{title: "...", summary: "...", ...}, ...]
+# 失敗 → 空配列 [] が返る（エラーハンドリング済み）</code></pre>
+
+    <h3>よくあるエラーと対処</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>エラー</th>
+          <th>原因</th>
+          <th>対処</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>KeyError: key not found: "TAVILY_API_KEY"</code></td>
+          <td><code>.env</code> にキーが未設定</td>
+          <td><code>.env</code> に <code>TAVILY_API_KEY=...</code> を追加</td>
+        </tr>
+        <tr>
+          <td><code>TavilyService::ApiError: 401</code></td>
+          <td>APIキーが無効</td>
+          <td><a href="https://tavily.com" style="color:var(--accent)">tavily.com</a> でキーを再確認</td>
+        </tr>
+        <tr>
+          <td>AI 要約が <code>[]</code>（空配列）を返す</td>
+          <td>Gemini API の 429（クォータ超過）or モデル不在</td>
+          <td>モデル名を変更（例: <code>gemini-3.1-flash-lite-preview</code>）</td>
+        </tr>
+        <tr>
+          <td><code>NotImplementedError: fork()</code></td>
+          <td>Windows で fork モードを使おうとした</td>
+          <td><code>SOLID_QUEUE_SUPERVISOR_MODE=async</code> を指定</td>
+        </tr>
+        <tr>
+          <td><code>ArgumentError: unsupported signal 'SIGQUIT'</code></td>
+          <td>Windows で SIGQUIT を trap しようとした</td>
+          <td><code>solid_queue_windows.rb</code> イニシャライザを確認</td>
+        </tr>
+      </tbody>
+    </table>
 
     <div class="nav-footer">
       <a href="step6-landing-and-polish.html">← Step 6: 定期実行（Solid Queue）</a>
