@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solid Queue 詳解 | News Picker 移行ガイド</title>
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155; --border: #334155; --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8; --rails-red: #cc0000; --react-blue: #61dafb; --green: #4ade80; --yellow: #fbbf24; --code-bg: #0d1117; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .back-link { display: inline-block; color: var(--accent); text-decoration: none; margin-bottom: 2rem; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .step-meta { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--accent); }
+    p { margin-bottom: 1rem; }
+    .why-box { background: rgba(251, 191, 36, 0.05); border-left: 4px solid var(--yellow); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .why-box::before { content: "💡 ポイント"; display: block; font-weight: 700; color: var(--yellow); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .warn-box { background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .warn-box::before { content: "⚠️ 注意"; display: block; font-weight: 700; color: #ef4444; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .tip-box::before { content: "📝 具体例"; display: block; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; line-height: 1.5; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: var(--surface); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85rem; }
+    .file-label { display: inline-block; background: var(--surface); color: var(--text-muted); padding: 0.2rem 0.75rem; border-radius: 0.25rem 0.25rem 0 0; font-size: 0.75rem; font-family: monospace; margin-top: 1rem; border: 1px solid var(--border); border-bottom: none; }
+    .file-label + pre { margin-top: 0; border-top-left-radius: 0; }
+    ul, ol { margin: 1rem 0; padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; white-space: pre; overflow-x: auto; line-height: 1.6; }
+    .nav-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .nav-footer a:hover { text-decoration: underline; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    th, td { padding: 0.75rem; text-align: left; border: 1px solid var(--border); }
+    th { background: var(--surface); color: var(--accent); }
+    td { background: var(--code-bg); }
+    .qa { margin: 1.5rem 0; }
+    .qa-q { font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; }
+    .qa-a { margin-left: 1rem; margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="step6-landing-and-polish.html" class="back-link">← Step 6 に戻る</a>
+
+    <h1>Solid Queue 詳解</h1>
+    <p class="step-meta">定期実行・非同期ジョブの仕組みをゼロから理解する</p>
+
+    <!-- ===== 1. そもそもジョブキューとは ===== -->
+    <h2>1. そもそも「ジョブキュー」とは何か</h2>
+
+    <p>Webアプリでは「ユーザーのリクエストに対してすぐレスポンスを返したいが、裏では時間のかかる処理をしたい」場面がよくあります。例えば:</p>
+
+    <ul>
+      <li>外部API（Tavily）にアクセスして、ニュースを検索する → <strong>数秒〜十数秒</strong></li>
+      <li>AI（Google Gemini）に文章を要約させる → <strong>数秒〜十数秒</strong></li>
+      <li>メールを送信する → <strong>数秒</strong></li>
+    </ul>
+
+    <p>これらを「ユーザーがボタンを押した瞬間にその場で」やると、ユーザーはその間ずっと待たされます。</p>
+
+    <div class="flow-diagram">
+❌ 同期処理（ユーザーが待つ）:
+ユーザー → [リクエスト] → Rails → Tavily API (5秒) → AI API (5秒) → DB保存 → [レスポンス] → ユーザー
+                                                                                        ↑ 10秒待ち
+
+✅ 非同期処理（ジョブキュー）:
+ユーザー → [リクエスト] → Rails → 「あとでやる」とメモ → [レスポンス] → ユーザー
+                                        ↓                          ↑ 即座に返る
+                               ジョブキュー(DB)
+                                        ↓
+                                ワーカー(別プロセス) → Tavily API → AI API → DB保存</div>
+
+    <div class="why-box">
+      <strong>「メモ」がジョブキュー。</strong>「あとで〇〇をやる」という指示をDB（またはRedis）に書き込んでおき、別プロセス（ワーカー）がそれを順番に取り出して実行する仕組みです。
+    </div>
+
+    <!-- ===== 2. Solid Queue の仕組み ===== -->
+    <h2>2. Solid Queue はどこにジョブを保存するのか</h2>
+
+    <p>Solid Queue は <strong>PostgreSQL のテーブル</strong> にジョブ情報を保存します。特別なソフトウェア（Redis等）は不要で、アプリが既に使っているDBだけで動きます。</p>
+
+    <h3>主要なテーブル</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>テーブル名</th>
+          <th>役割</th>
+          <th>日常の例え</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>solid_queue_jobs</code></td>
+          <td>全ジョブの記録（何を、いつ実行するか）</td>
+          <td>「やることリスト」のメモ用紙</td>
+        </tr>
+        <tr>
+          <td><code>solid_queue_ready_executions</code></td>
+          <td>「今すぐ実行可能」なジョブ</td>
+          <td>机の上に出した「今やること」</td>
+        </tr>
+        <tr>
+          <td><code>solid_queue_scheduled_executions</code></td>
+          <td>「この時間になったら実行」なジョブ</td>
+          <td>カレンダーに書いた「明日やること」</td>
+        </tr>
+        <tr>
+          <td><code>solid_queue_claimed_executions</code></td>
+          <td>「今まさに実行中」のジョブ</td>
+          <td>「着手中」のふせん</td>
+        </tr>
+        <tr>
+          <td><code>solid_queue_failed_executions</code></td>
+          <td>失敗したジョブ（エラー内容を記録）</td>
+          <td>「失敗メモ」（後で再挑戦する）</td>
+        </tr>
+        <tr>
+          <td><code>solid_queue_recurring_tasks</code></td>
+          <td>定期実行タスクの設定</td>
+          <td>「毎朝9時にやること」の繰り返し予定</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      <strong>ジョブの一生:</strong><br>
+      ①作成（jobs テーブルに INSERT）<br>
+      → ②待機（ready または scheduled に移動）<br>
+      → ③取得（ワーカーが claimed に移動して「自分がやる」と宣言）<br>
+      → ④実行（ワーカーが処理を実行）<br>
+      → ⑤完了（finished_at が記録される）or 失敗（failed に移動）
+    </div>
+
+    <!-- ===== 3. プロセス構成 ===== -->
+    <h2>3. 登場するプロセス</h2>
+
+    <p>Solid Queue を使うとき、以下の <strong>2つのプロセス</strong> が動きます:</p>
+
+    <div class="flow-diagram">
+プロセス1: Rails サーバー（bin/rails s）
+  ┌─────────────────────────────────────────┐
+  │ HTTP リクエストを受け取って処理する      │
+  │ ジョブを作る側（perform_later を呼ぶ）  │
+  │ → solid_queue_jobs テーブルに INSERT    │
+  └─────────────────────────────────────────┘
+
+プロセス2: Solid Queue ワーカー（bin/jobs）
+  ┌─────────────────────────────────────────┐
+  │ ジョブを実行する側                      │
+  │                                         │
+  │ [dispatcher]                            │
+  │  - 定期実行のトリガー（recurring.yml）  │
+  │  - 予約時刻が来たジョブを ready に移動  │
+  │                                         │
+  │ [worker]                                │
+  │  - ready のジョブを取り出して実行       │
+  │  - 完了/失敗を記録                      │
+  └─────────────────────────────────────────┘</div>
+
+    <div class="why-box">
+      <strong>なぜ2プロセス必要か:</strong><br>
+      Railsサーバーはユーザーからのリクエストに集中すべき。重い処理（外部API呼び出し）をRailsサーバー内で実行すると、その間に来た他のリクエストが待たされる。<br><br>
+      別プロセス（bin/jobs）がジョブを実行することで、Railsサーバーは常にレスポンスを返すことに集中できる。
+    </div>
+
+    <div class="tip-box">
+      <strong>開発時の起動コマンド:</strong><br>
+      ターミナル1: <code>bin/rails s -p 3000</code>（Rails サーバー）<br>
+      ターミナル2: <code>bin/jobs</code>（Solid Queue ワーカー）<br><br>
+      両方を起動しないと定期実行は動きません。
+    </div>
+
+    <!-- ===== 4. 定期実行のしくみ ===== -->
+    <h2>4. 定期実行（recurring tasks）のしくみ</h2>
+
+    <p>「6時間ごとにニュースを収集する」を実現する仕組みです。</p>
+
+    <div class="file-label">config/recurring.yml</div>
+    <pre><code>production:
+  fetch_all_news:
+    class: FetchAllNewsJob    # 実行するジョブクラス
+    schedule: every 6 hours   # 実行間隔
+    description: "全ユーザーの登録キーワードについてニュースを収集"</code></pre>
+
+    <h3>何が起きるか（時系列）</h3>
+
+    <div class="flow-diagram">
+ 0:00  dispatcher が起動。recurring.yml を読み込み
+       「fetch_all_news を 6時間ごとに実行する」と理解
+
+ 0:00  初回実行:
+       → solid_queue_jobs に FetchAllNewsJob を INSERT
+       → worker がそれを取り出して実行
+       → FetchAllNewsJob が Interest.find_each で
+          全キーワードについて FetchNewsJob を INSERT
+       → worker が各 FetchNewsJob を実行
+
+ 6:00  2回目実行（以降繰り返し）:
+       → dispatcher が「6時間経った」と判断
+       → 再び FetchAllNewsJob を INSERT
+       → 以下同じ
+
+12:00  3回目実行...
+       (以下繰り返し)</div>
+
+    <div class="why-box">
+      <strong>cron との違い:</strong><br>
+      OS の cron は「この時刻に実行」と指定する（例: 毎日9時）。Solid Queue の recurring tasks も同様のことができるが、加えて:
+      <ul style="margin-top:0.5rem">
+        <li>ジョブの成功/失敗がDBに記録される</li>
+        <li>失敗時に自動リトライできる</li>
+        <li>重複実行の防止が組み込まれている</li>
+        <li>アプリと同じ場所で管理できる（crontab を別管理しなくていい）</li>
+      </ul>
+    </div>
+
+    <!-- ===== 5. 2段階のジョブ構成 ===== -->
+    <h2>5. なぜジョブを2段階にするのか</h2>
+
+    <p>このプロジェクトでは <strong>FetchAllNewsJob → FetchNewsJob</strong> の2段階構成にしています。</p>
+
+    <div class="flow-diagram">
+FetchAllNewsJob（定期実行、1つだけ）
+  │
+  ├→ FetchNewsJob(interest_id: 1)  ← React のニュースを取得
+  ├→ FetchNewsJob(interest_id: 2)  ← Rails のニュースを取得
+  └→ FetchNewsJob(interest_id: 3)  ← AWS のニュースを取得
+      ↑ これらは並列に実行される（worker のスレッド数次第）</div>
+
+    <div class="qa">
+      <div class="qa-q">Q: 全部を1つのジョブでやればいいのでは？</div>
+      <div class="qa-a">
+        <p>1つのジョブで全キーワードを処理すると、こんな問題が起きます:</p>
+        <ul>
+          <li><strong>1つ失敗すると全部やり直し</strong>: 「React」は成功したのに「Rails」でAPIエラー → 全部最初からやり直し</li>
+          <li><strong>並列化できない</strong>: 3キーワードを順番に処理するので 5秒 × 3 = 15秒かかる</li>
+          <li><strong>リトライが大雑把</strong>: 「Rails」だけ失敗したのに「React」も再実行される</li>
+        </ul>
+        <p>2段階にすると:</p>
+        <ul>
+          <li>「React」は成功、「Rails」は失敗 → 「Rails」だけリトライ</li>
+          <li>3ジョブがworkerの別スレッドで並列実行 → 5秒で全完了</li>
+          <li>あるユーザーのInterestが消されていても、そのジョブだけ安全に破棄</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ===== 6. retry_on と discard_on ===== -->
+    <h2>6. エラー処理: retry_on と discard_on</h2>
+
+    <div class="file-label">app/jobs/fetch_news_job.rb の冒頭</div>
+    <pre><code>class FetchNewsJob &lt; ApplicationJob
+  retry_on TavilyService::ApiError, wait: :polynomially_longer, attempts: 3
+  retry_on AiSummaryService::ApiError, wait: 30.seconds, attempts: 2
+  discard_on ActiveRecord::RecordNotFound</code></pre>
+
+    <h3>retry_on — 「失敗したら、少し待ってもう一度やる」</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>設定</th>
+          <th>意味</th>
+          <th>具体的な動き</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>wait: :polynomially_longer</code></td>
+          <td>リトライ間隔を徐々に長くする</td>
+          <td>1回目: 3秒後、2回目: 18秒後、3回目: 83秒後</td>
+        </tr>
+        <tr>
+          <td><code>wait: 30.seconds</code></td>
+          <td>固定間隔でリトライ</td>
+          <td>1回目: 30秒後、2回目: 30秒後</td>
+        </tr>
+        <tr>
+          <td><code>attempts: 3</code></td>
+          <td>最大リトライ回数</td>
+          <td>3回失敗したらfailed_executionsに記録</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      <strong>なぜ <code>polynomially_longer</code> を使うのか:</strong><br>
+      外部APIが一時的に過負荷の場合、すぐにリトライするとさらに負荷をかけてしまう。徐々に間隔を空けることで、APIが回復する時間を与える。これを <strong>Exponential Backoff</strong>（指数バックオフ）と呼びます。<br><br>
+      「APIが混んでいる → すぐリトライ → さらに混む → またリトライ → もっと混む」という悪循環を防ぐための定石パターンです。
+    </div>
+
+    <h3>discard_on — 「リトライしても意味がないので、そのまま捨てる」</h3>
+
+    <div class="tip-box">
+      <code>discard_on ActiveRecord::RecordNotFound</code> の意味:<br><br>
+      定期実行のタイミングで FetchNewsJob が走る。しかしその直前にユーザーが Interest を削除していた場合、<code>Interest.find(interest_id)</code> で RecordNotFound が発生する。<br><br>
+      このケースでリトライしても、削除されたレコードは復活しない。だから「失敗としてではなく、不要なジョブとして静かに捨てる」のが正しい。
+    </div>
+
+    <!-- ===== 7. Serviceクラスの役割 ===== -->
+    <h2>7. Service クラスの設計</h2>
+
+    <p>ジョブの中で直接APIを叩くのではなく、<strong>Service クラス</strong>に切り出しています。</p>
+
+    <div class="flow-diagram">
+FetchNewsJob（ジョブ = 指揮者）
+  │
+  ├→ TavilyService.search('React')      ← 外部APIとの通信を担当
+  │   └→ HTTP POST → Tavily API → 結果を整形して返す
+  │
+  ├→ AiSummaryService.summarize(...)     ← AI APIとの通信を担当
+  │   └→ HTTP POST → Google AI → 要約結果を整形して返す
+  │
+  └→ News.create!(...)                   ← DB保存</div>
+
+    <div class="qa">
+      <div class="qa-q">Q: なぜわざわざ別クラスにするの？ジョブの中に書けばいいのでは？</div>
+      <div class="qa-a">
+        <p>3つの理由があります:</p>
+        <ol>
+          <li><strong>テストしやすい:</strong> <code>TavilyService.search</code> を単体でテストできる。ジョブのテストでは <code>allow(TavilyService).to receive(:search).and_return([...])</code> でモックするだけ</li>
+          <li><strong>再利用できる:</strong> 将来「管理画面から手動でニュース取得」機能を作るとき、同じ <code>TavilyService.search</code> を呼ぶだけ</li>
+          <li><strong>変更箇所が限定される:</strong> Tavily API の仕様が変わったら、<code>tavily_service.rb</code> だけ修正すればいい。ジョブや他のコードは変更不要</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- ===== 8. DB設定 ===== -->
+    <h2>8. データベース構成</h2>
+
+    <p>Solid Queue は専用のテーブルを使います。このプロジェクトでは <strong>別データベース</strong>（queue DB）に配置しています。</p>
+
+    <div class="flow-diagram">
+backend_development（メインDB）         backend_development_queue（キューDB）
+┌─────────────────────────┐             ┌──────────────────────────────┐
+│ users                   │             │ solid_queue_jobs             │
+│ interests               │             │ solid_queue_ready_executions │
+│ news                    │             │ solid_queue_recurring_tasks  │
+│ jwt_denylists           │             │ ... (その他SQテーブル)       │
+└─────────────────────────┘             └──────────────────────────────┘</div>
+
+    <div class="qa">
+      <div class="qa-q">Q: なぜDBを分けるの？同じDBでもいいのでは？</div>
+      <div class="qa-a">
+        <p>同じDBでも動きます。分ける理由は:</p>
+        <ul>
+          <li><strong>マイグレーションの分離:</strong> アプリのマイグレーションとSolid Queueのマイグレーションが混ざらない</li>
+          <li><strong>負荷分散:</strong> 本番ではジョブの書き込み頻度が高い。メインDBに影響を与えない</li>
+          <li><strong>Rails 8 の推奨構成:</strong> Rails 8 ではqueue, cache, cable を別DBにする設計が標準</li>
+        </ul>
+        <p>開発環境では同じPostgreSQLサーバー上の別データベースなので、運用コストは変わりません。</p>
+      </div>
+    </div>
+
+    <h3>設定ファイルの対応関係</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ファイル</th>
+          <th>役割</th>
+          <th>いつ使われるか</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>config/database.yml</code></td>
+          <td>DB接続先の定義（primary + queue）</td>
+          <td>Rails 起動時</td>
+        </tr>
+        <tr>
+          <td><code>db/queue_schema.rb</code></td>
+          <td>queue DB のテーブル定義</td>
+          <td><code>db:schema:load:queue</code> 実行時</td>
+        </tr>
+        <tr>
+          <td><code>config/queue.yml</code></td>
+          <td>ワーカーの同時実行数やポーリング間隔</td>
+          <td><code>bin/jobs</code> 起動時</td>
+        </tr>
+        <tr>
+          <td><code>config/recurring.yml</code></td>
+          <td>定期実行タスクの定義</td>
+          <td><code>bin/jobs</code> 起動時</td>
+        </tr>
+        <tr>
+          <td><code>config/application.rb</code></td>
+          <td><code>queue_adapter = :solid_queue</code> の指定</td>
+          <td>Rails 起動時</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ===== 9. perform_later vs perform_now ===== -->
+    <h2>9. perform_later と perform_now の違い</h2>
+
+    <pre><code># perform_later: ジョブをキューに入れて「あとで」実行する
+FetchNewsJob.perform_later(interest.id)
+# → solid_queue_jobs テーブルに INSERT
+# → bin/jobs のワーカーが取り出して実行
+
+# perform_now: その場で「今すぐ」同期実行する
+FetchNewsJob.perform_now(interest.id)
+# → 呼び出した場所でそのまま実行される
+# → 完了するまで次の行に進まない</code></pre>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>perform_later</th>
+          <th>perform_now</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>いつ実行？</strong></td>
+          <td>ワーカーが空き次第</td>
+          <td>呼んだ瞬間</td>
+        </tr>
+        <tr>
+          <td><strong>呼び出し元は？</strong></td>
+          <td>すぐ次の行に進む</td>
+          <td>完了まで待つ</td>
+        </tr>
+        <tr>
+          <td><strong>失敗時は？</strong></td>
+          <td>retry_on で自動リトライ</td>
+          <td>例外が呼び出し元に飛ぶ</td>
+        </tr>
+        <tr>
+          <td><strong>使う場面</strong></td>
+          <td>本番のほとんどのケース</td>
+          <td>テスト、Rails console での確認</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tip-box">
+      <strong>FetchAllNewsJob の中で perform_later を使う理由:</strong><br><br>
+      <code>FetchAllNewsJob</code> は「全キーワードについてジョブを作る」だけの軽い処理。各キーワードの重い処理（API呼び出し）は <code>FetchNewsJob.perform_later</code> でキューに入れることで、ワーカーのスレッドが並列に処理してくれます。<br><br>
+      もし <code>perform_now</code> にすると、3キーワードを順番に処理して15秒かかるところ、<code>perform_later</code> なら3ジョブが並列実行されて5秒で済みます。
+    </div>
+
+    <!-- ===== 10. テスト時の挙動 ===== -->
+    <h2>10. テスト環境での挙動</h2>
+
+    <div class="file-label">config/environments/test.rb</div>
+    <pre><code>config.active_job.queue_adapter = :test</code></pre>
+
+    <p>テスト環境では <code>:test</code> アダプターを使います。これにより:</p>
+
+    <ul>
+      <li><code>perform_later</code> でジョブが <strong>実際には実行されず</strong>、キューに積まれるだけ</li>
+      <li><code>have_enqueued_job</code> マッチャで「ジョブがキューに入ったか」をテストできる</li>
+      <li><code>perform_now</code> はテストでもその場で実行される（モックと組み合わせて使う）</li>
+    </ul>
+
+    <pre><code># ジョブがキューに入ったことをテストする
+expect {
+  described_class.perform_now  # FetchAllNewsJob を実行
+}.to have_enqueued_job(FetchNewsJob).exactly(2).times
+
+# ジョブの中の処理をテストする（外部APIはモック）
+allow(TavilyService).to receive(:search).and_return(fake_results)
+expect { FetchNewsJob.perform_now(interest.id) }.to change(News, :count).by(1)</code></pre>
+
+    <!-- ===== 11. よくある疑問 ===== -->
+    <h2>11. よくある疑問</h2>
+
+    <div class="qa">
+      <div class="qa-q">Q: bin/jobs を起動し忘れたらどうなる？</div>
+      <div class="qa-a">
+        ジョブは <code>solid_queue_jobs</code> テーブルに INSERT されたまま待機します。<code>bin/jobs</code> を起動した時点で、溜まっていたジョブが順番に処理されます。データは失われません。
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">Q: 同じジョブが2回実行されることはある？</div>
+      <div class="qa-a">
+        Solid Queue はジョブの取得にDBのロック機構（FOR UPDATE SKIP LOCKED）を使うため、同じジョブが2つのワーカーに取られることはありません。定期実行も <code>solid_queue_recurring_executions</code> テーブルでUNIQUE制約をかけて重複を防ぎます。
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">Q: ジョブが失敗し続けたらどうなる？</div>
+      <div class="qa-a">
+        <code>retry_on</code> で指定した回数リトライした後、<code>solid_queue_failed_executions</code> テーブルに記録されて停止します。管理UIや <code>SolidQueue::FailedExecution.all</code> で確認でき、手動で再実行することもできます。
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">Q: 本番で bin/jobs はどうやって動かす？</div>
+      <div class="qa-a">
+        ECS（AWS）の場合、Railsサーバー用タスクとは別に、<code>command: ['bin/jobs']</code> のタスク定義を作成します。同じDockerイメージから起動コマンドだけ変えるパターンです。Step 7 で詳しく解説します。
+      </div>
+    </div>
+
+    <div class="nav-footer">
+      <a href="step6-landing-and-polish.html">← Step 6: 定期実行（Solid Queue）</a>
+      <a href="index.html">ガイド一覧に戻る →</a>
+    </div>
+  </div>
+</body>
+</html>

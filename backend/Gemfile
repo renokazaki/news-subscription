@@ -17,8 +17,7 @@ gem "devise"
 gem "devise-jwt"
 
 # Background Jobs
-gem "sidekiq"
-gem "sidekiq-scheduler"
+gem "solid_queue"
 
 # Environment
 gem "dotenv-rails", groups: [:development, :test]
@@ -38,4 +37,5 @@ end
 
 group :test do
   gem "rspec-openapi"
+  gem "webmock"
 end

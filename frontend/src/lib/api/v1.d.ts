@@ -49,12 +49,12 @@ export interface paths {
                         /**
                          * @example {
                          *       "user": {
-                         *         "id": 53,
+                         *         "id": 130,
                          *         "email": "test@example.com",
-                         *         "display_name": "Altha Collins",
+                         *         "display_name": "Debrah Jacobi",
                          *         "profile_image": null
                          *       },
-                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI1MyIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4Mjc0MjI0OSwiZXhwIjoxNzgyODI4NjQ5LCJqdGkiOiJkYjg1NjQ4Yi0yMzFmLTQwYTYtYWE0MS0wNDlmODBkYWQ0NDIifQ.wVLLu71Pz7rlqUQglYxSvRVIstW5ullnfQD2AkM-AG8"
+                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMzAiLCJzY3AiOiJ1c2VyIiwiYXVkIjpudWxsLCJpYXQiOjE3ODI3NDY1MDQsImV4cCI6MTc4MjgzMjkwNCwianRpIjoiODE0M2ViMDAtZDg2MS00MDQ5LTlmZTctNjVhZTE4ZWM2MjIzIn0.gBNj3dfRTYNl7rEuEFR0RTqkGNXoC62YcUue3gcSR7I"
                          *     }
                          */
                         "application/json": {
@@ -184,12 +184,12 @@ export interface paths {
                         /**
                          * @example {
                          *       "user": {
-                         *         "id": 52,
+                         *         "id": 129,
                          *         "email": "new@example.com",
                          *         "display_name": "New User",
                          *         "profile_image": null
                          *       },
-                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI1MiIsInNjcCI6InVzZXIiLCJhdWQiOm51bGwsImlhdCI6MTc4Mjc0MjI0NywiZXhwIjoxNzgyODI4NjQ3LCJqdGkiOiJmMTkwMWQzMy1jOTQzLTRkOWUtODYxYy1mNGU5MWE3MmEyN2MifQ.0BHDhPzKI2LpjYVedw5MRnfQENFvgltaXAWnLJvryxc"
+                         *       "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjkiLCJzY3AiOiJ1c2VyIiwiYXVkIjpudWxsLCJpYXQiOjE3ODI3NDY1MDQsImV4cCI6MTc4MjgzMjkwNCwianRpIjoiNGExOTQxMGQtOTliOC00ZmRlLWIyNmQtNmViMWE5MDVlYzE4In0.lXjNLFnh2egWQdPJF4wilsD-3tbzaXhBVxxnFdnD-IM"
                          *     }
                          */
                         "application/json": {
@@ -257,14 +257,14 @@ export interface paths {
                         /**
                          * @example [
                          *       {
-                         *         "id": 12,
+                         *         "id": 62,
                          *         "keyword": "Rails",
-                         *         "created_at": "2026-06-29T14:10:51.098Z"
+                         *         "created_at": "2026-06-29T15:21:45.005Z"
                          *       },
                          *       {
-                         *         "id": 11,
+                         *         "id": 61,
                          *         "keyword": "React",
-                         *         "created_at": "2026-06-29T14:10:51.081Z"
+                         *         "created_at": "2026-06-29T15:21:44.990Z"
                          *       }
                          *     ]
                          */
@@ -311,9 +311,9 @@ export interface paths {
                     content: {
                         /**
                          * @example {
-                         *       "id": 13,
+                         *       "id": 63,
                          *       "keyword": "TypeScript",
-                         *       "created_at": "2026-06-29T14:10:51.227Z"
+                         *       "created_at": "2026-06-29T15:21:45.090Z"
                          *     }
                          */
                         "application/json": {
@@ -347,7 +347,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @example 15 */
+                    /** @example 65 */
                     id: number;
                 };
                 cookie?: never;
@@ -371,7 +371,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @example 14 */
+                    /** @example 64 */
                     id: number;
                 };
                 cookie?: never;
@@ -401,9 +401,9 @@ export interface paths {
                     content: {
                         /**
                          * @example {
-                         *       "id": 14,
+                         *       "id": 64,
                          *       "keyword": "Vue",
-                         *       "created_at": "2026-06-29T14:10:51.263Z"
+                         *       "created_at": "2026-06-29T15:21:45.138Z"
                          *     }
                          */
                         "application/json": {
@@ -448,11 +448,11 @@ export interface paths {
                         /**
                          * @example [
                          *       {
-                         *         "id": 33,
+                         *         "id": 76,
                          *         "title": "React 19 Released",
                          *         "tag": "React",
                          *         "published_at": "2024-06-15T00:00:00.000Z",
-                         *         "url": "http://vandervort.example/miki"
+                         *         "url": "http://krajcik.example/dannielle_kiehn"
                          *       }
                          *     ]
                          */
@@ -488,7 +488,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @example 35 */
+                    /** @example 78 */
                     id: number;
                 };
                 cookie?: never;
@@ -503,12 +503,12 @@ export interface paths {
                     content: {
                         /**
                          * @example {
-                         *       "id": 35,
+                         *       "id": 78,
                          *       "title": "Detail Test",
                          *       "text": "Full text here",
-                         *       "tag": "TypeScript",
-                         *       "url": "http://corkery.example/ronald",
-                         *       "published_at": "2026-06-17T08:56:13.000Z"
+                         *       "tag": "AWS",
+                         *       "url": "http://sanford.test/carlton",
+                         *       "published_at": "2026-06-22T10:10:30.000Z"
                          *     }
                          */
                         "application/json": {
@@ -556,9 +556,9 @@ export interface paths {
                     content: {
                         /**
                          * @example {
-                         *       "id": 64,
-                         *       "email": "james_gutmann@bogan.test",
-                         *       "display_name": "Marty Prosacco",
+                         *       "id": 141,
+                         *       "email": "marjory_heaney@pollich.test",
+                         *       "display_name": "Alphonse Lind",
                          *       "profile_image": null
                          *     }
                          */
