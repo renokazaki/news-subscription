@@ -35,6 +35,24 @@
     .section-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; vertical-align: middle; }
     .tag-rails { background: rgba(204, 0, 0, 0.1); color: var(--rails-red); border: 1px solid rgba(204, 0, 0, 0.2); }
     .tag-react { background: rgba(97, 218, 251, 0.1); color: var(--react-blue); border: 1px solid rgba(97, 218, 251, 0.2); }
+    .tip-box { background: rgba(56, 189, 248, 0.05); border-left: 4px solid var(--accent); padding: 1rem 1.25rem; border-radius: 0 0.5rem 0.5rem 0; margin: 1rem 0; }
+    .tip-box::before { content: "📝 Tips"; display: block; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .flow-diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8rem; line-height: 1.6; font-family: 'JetBrains Mono', 'Fira Code', monospace; white-space: pre; color: var(--text-muted); }
+    .pattern-tabs { display: flex; gap: 0; margin-top: 1.5rem; }
+    .pattern-tab { padding: 0.5rem 1.25rem; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: none; border-radius: 0.5rem 0.5rem 0 0; transition: all 0.2s; }
+    .pattern-tab:hover { background: var(--surface-hover); }
+    .pattern-tab.active { background: var(--code-bg); color: var(--accent); border-bottom: 1px solid var(--code-bg); position: relative; z-index: 1; }
+    .pattern-tab.tab-manual.active { color: var(--yellow); border-color: var(--yellow); }
+    .pattern-tab.tab-openapi.active { color: var(--accent); border-color: var(--accent); }
+    .pattern-content { border: 1px solid var(--border); border-radius: 0 0.5rem 0.5rem 0.5rem; padding: 1.5rem; margin-top: -1px; background: var(--code-bg); display: none; }
+    .pattern-content.active { display: block; }
+    .pattern-label { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; margin-bottom: 0.75rem; }
+    .pattern-label.label-manual { background: rgba(251, 191, 36, 0.1); color: var(--yellow); border: 1px solid rgba(251, 191, 36, 0.2); }
+    .pattern-label.label-openapi { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
+    .compare-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    .compare-table th, .compare-table td { padding: 0.75rem; text-align: left; border: 1px solid var(--border); }
+    .compare-table th { background: var(--surface); color: var(--accent); }
+    .compare-table td { background: var(--code-bg); }
   </style>
 </head>
 <body>
@@ -267,92 +285,486 @@ curl http://localhost:3000/api/v1/news/1 \
   -H "Authorization: Bearer YOUR_TOKEN"</code></pre>
 
     <!-- ==================== Frontend ==================== -->
-    <h2>4-6. フロントエンド: OpenAPIフック <span class="section-tag tag-react">React</span></h2>
+    <h2>4-6. フロントエンド: useNews フック <span class="section-tag tag-react">React</span></h2>
 
-    <p>Step 4-3のRSpecテストからOpenAPI仕様書が生成済み。<code>$api</code> を使って型安全にNews APIを呼び出す:</p>
+    <p>Step 3 と同じく、手動パターンとOpenAPIパターンの両方を示す。News APIはクエリパラメータ（フィルタ）を持つ点がInterestとの違い。</p>
 
-    <div class="file-label">ニュース一覧取得（フィルタ付き）</div>
-    <pre><code>import { $api } from '../lib/api/client';
-
-// 一覧取得 — クエリパラメータも型安全
-const { data: news, isLoading } = $api.useQuery(
-  'get', '/api/v1/news',
-  {
-    params: {
-      query: {
-        date: selectedDate,    // string | undefined
-        tag: selectedInterest, // string | undefined
-      },
-    },
-  }
-);
-
-// 詳細取得
-const { data: detail } = $api.useQuery(
-  'get', '/api/v1/news/{id}',
-  {
-    params: { path: { id: newsId } },
-  }
-);</code></pre>
-
-    <div class="why-box">
-      <strong>手動フックとの違い:</strong> 従来の <code>useNews</code> フックでは <code>URLSearchParams</code> の組み立てやqueryKeyの設計を手動で行っていた。<code>$api.useQuery</code> ではパスとパラメータを指定するだけで、型チェック・queryKey生成・URL組み立てが全て自動化される。<br><br>
-      <code>query</code> パラメータに <code>undefined</code> の値がある場合は自動的に除外されるため、フィルタ条件の有無による分岐も不要。
+    <div class="pattern-tabs" data-group="hooks">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('hooks', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('hooks', 'openapi')">OpenAPIパターン</button>
     </div>
 
-    <h2>4-7. フロントエンド: Dashboard レイアウト設計 <span class="section-tag tag-react">React</span></h2>
+    <div class="pattern-content active" data-group="hooks" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
 
-    <p>React Router v7のネストレイアウトで構成:</p>
+      <p>まず型定義を手書きする:</p>
 
-    <pre><code>// ルート構成（再掲）
-{
-  element: &lt;AuthGuard /&gt;,        // 認証チェック
-  children: [{
-    element: &lt;DashboardLayout /&gt;, // Sidebar + Header + Outlet
-    children: [
-      { path: '/dashboard', element: &lt;DashboardPage /&gt; },
-    ],
-  }],
-}
+      <div class="file-label">frontend/src/types/news.ts</div>
+      <pre><code>export type NewsSummary = {
+  id: number;
+  title: string;
+  tag: string;
+  published_at: string;
+  url: string;
+};
 
-// DashboardLayout.tsx の構造
-&lt;div className="flex h-screen"&gt;
-  &lt;Sidebar /&gt;                {/* Interest一覧 + Calendar */}
-  &lt;div className="flex-1 flex flex-col"&gt;
-    &lt;Header /&gt;               {/* ユーザーメニュー */}
-    &lt;main className="flex-1 overflow-auto p-6"&gt;
-      &lt;Outlet /&gt;             {/* NewsList が入る */}
-    &lt;/main&gt;
-  &lt;/div&gt;
-&lt;/div&gt;</code></pre>
+export type NewsDetail = NewsSummary &amp; {
+  text: string;
+};</code></pre>
 
-    <h3>フィルタ状態の管理</h3>
+      <div class="file-label">frontend/src/hooks/useNews.ts</div>
+      <pre><code>import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type { NewsSummary, NewsDetail } from '@/types/news';
 
-    <pre><code>// Jotai atom でUIローカル状態を管理
-// selectedDateAtom: カレンダーで選択した日付
-// selectedInterestAtom: サイドバーで選択したInterest
+// ① 一覧取得（フィルタ付き）
+export const useNewsList = (filters?: { date?: string; tag?: string }) =&gt; {
+  // クエリパラメータを手動で組み立て
+  const params = new URLSearchParams();
+  if (filters?.date) params.set('date', filters.date);
+  if (filters?.tag) params.set('tag', filters.tag);
+  const query = params.toString();
 
-// DashboardPage で $api.useQuery に渡す:
-const [selectedDate] = useAtom(selectedDateAtom);
-const [selectedInterest] = useAtom(selectedInterestAtom);
+  return useQuery({
+    // フィルタが変わるとqueryKeyが変わり、自動再フェッチされる
+    queryKey: ['news', filters],
+    queryFn: () =&gt; api&lt;NewsSummary[]&gt;(`/news${query ? `?${query}` : ''}`),
+  });
+};
 
-const { data: news, isLoading } = $api.useQuery(
-  'get', '/api/v1/news',
-  {
-    params: {
-      query: {
-        date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
-        tag: selectedInterest,
-      },
-    },
-  }
-);</code></pre>
+// ② 詳細取得
+export const useNewsDetail = (id: number) =&gt; {
+  return useQuery({
+    queryKey: ['news', id],
+    queryFn: () =&gt; api&lt;NewsDetail&gt;(`/news/${id}`),
+  });
+};</code></pre>
 
-    <div class="why-box">
-      フィルタ状態（UI状態）は Jotai、サーバーデータ（ニュース一覧）は TanStack Query（<code>$api</code> 経由）で管理する。この分離が重要: Jotaiのatomが変わる → <code>$api.useQuery</code> のparamsが変わる → queryKeyが変わる → 自動再フェッチ。明示的に「再取得」ロジックを書く必要がない。
+      <div class="why-box">
+        <strong>queryKey にフィルタを含める理由:</strong><br>
+        <code>queryKey: ['news', filters]</code> とすることで、フィルタが変わるたびに異なるキャッシュエントリになる。<code>{ tag: 'React' }</code> と <code>{ tag: 'Rails' }</code> は別のキャッシュとして保持されるため、タグを切り替えたときに前回のデータが即座に表示される（キャッシュヒット）。
+      </div>
+
+      <div class="warn-box">
+        <strong>URLSearchParams の手動組み立てが必要:</strong> <code>undefined</code> のパラメータを除外する処理や、URLエンコードを自分で行う必要がある。パラメータが増えるとボイラープレートも増える。
+      </div>
     </div>
 
-    <h2>4-8. 動作確認チェックリスト</h2>
+    <div class="pattern-content" data-group="hooks" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+
+      <p>型定義は不要（自動生成済み）。フックもシンプル:</p>
+
+      <div class="file-label">frontend/src/hooks/useNews.ts</div>
+      <pre><code>import $api from '@/lib/$api';
+
+// ① 一覧取得（フィルタ付き）
+export const useNewsList = (filters?: { date?: string; tag?: string }) =&gt; {
+  return $api.useQuery('get', '/api/v1/news', {
+    params: { query: filters },
+  });
+};
+
+// ② 詳細取得
+export const useNewsDetail = (id: number) =&gt; {
+  return $api.useQuery('get', '/api/v1/news/{id}', {
+    params: { path: { id } },
+  });
+};</code></pre>
+
+      <div class="why-box">
+        <strong>クエリパラメータも型安全:</strong><br>
+        <code>params.query</code> に渡せるプロパティは <code>date?: string</code> と <code>tag?: string</code> だけ。存在しないパラメータ名（<code>category</code> など）を書くとコンパイルエラーになる。<br><br>
+        <code>undefined</code> の値は自動的にURLから除外される。URLSearchParamsの手動組み立ては不要。queryKeyもパス+パラメータから自動生成される。
+      </div>
+    </div>
+
+    <h3>queryKey の比較</h3>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>手動パターン</th>
+          <th>OpenAPIパターン</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>一覧（フィルタなし）</strong></td>
+          <td><code>['news', undefined]</code></td>
+          <td><code>['get', '/api/v1/news', { params: { query: undefined } }]</code></td>
+        </tr>
+        <tr>
+          <td><strong>一覧（タグフィルタ）</strong></td>
+          <td><code>['news', { tag: 'React' }]</code></td>
+          <td><code>['get', '/api/v1/news', { params: { query: { tag: 'React' } } }]</code></td>
+        </tr>
+        <tr>
+          <td><strong>詳細</strong></td>
+          <td><code>['news', 42]</code></td>
+          <td><code>['get', '/api/v1/news/{id}', { params: { path: { id: 42 } } }]</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="why-box">
+      どちらもフィルタが変わればqueryKeyが変わり、TanStack Queryが自動で再フェッチする仕組みは同じ。OpenAPIパターンではqueryKeyの設計を自分で考える必要がない。
+    </div>
+
+    <!-- ===== 4-7. フィルタ状態管理 ===== -->
+    <h2>4-7. フロントエンド: フィルタ状態の管理（Jotai） <span class="section-tag tag-react">React</span></h2>
+
+    <p>フィルタUI状態（日付・タグ）は <strong>Jotai</strong> で管理する。この部分は両パターン共通。</p>
+
+    <div class="file-label">frontend/src/store/filters.ts</div>
+    <pre><code>import { atom } from 'jotai';
+
+export const selectedDateAtom = atom&lt;string | undefined&gt;(undefined);
+export const selectedTagAtom = atom&lt;string | undefined&gt;(undefined);</code></pre>
+
+    <div class="why-box">
+      <strong>なぜ Jotai を使うのか:</strong>
+      <ul style="margin-top:0.5rem">
+        <li><strong>TanStack Query</strong> = サーバー状態（APIレスポンス）の管理</li>
+        <li><strong>Jotai</strong> = UIローカル状態（フィルタ選択、モーダルの開閉など）の管理</li>
+      </ul>
+      フィルタは「ユーザーがUIで選んだ値」であってサーバーから取得するデータではない。2つのライブラリで責務を分ける。<br><br>
+      <strong>データフロー:</strong> Jotaiのatomが変わる → useNewsList のフィルタ引数が変わる → queryKeyが変わる → TanStack Query が自動再フェッチ。明示的に「再取得」ロジックを書く必要がない。
+    </div>
+
+    <h3>コンポーネントでの使用</h3>
+
+    <pre><code>import { useAtom } from 'jotai';
+import { selectedDateAtom, selectedTagAtom } from '@/store/filters';
+import { useNewsList } from '@/hooks/useNews';
+
+function DashboardPage() {
+  const [selectedDate] = useAtom(selectedDateAtom);
+  const [selectedTag] = useAtom(selectedTagAtom);
+
+  // atomの値がそのままフィルタとして渡る
+  const { data: news, isLoading } = useNewsList({
+    date: selectedDate,
+    tag: selectedTag,
+  });
+
+  // ...
+}</code></pre>
+
+    <!-- ===== 4-8. UIコンポーネント ===== -->
+    <h2>4-8. フロントエンド: UIコンポーネント <span class="section-tag tag-react">React</span></h2>
+
+    <h3>NewsFilters（フィルタUI）</h3>
+
+    <p>タグフィルタ（ユーザーのInterestから取得）と日付フィルタを提供する。</p>
+
+    <div class="file-label">frontend/src/components/news/NewsFilters.tsx</div>
+    <pre><code>import { useAtom } from 'jotai';
+import { selectedDateAtom, selectedTagAtom } from '@/store/filters';
+import { useInterests } from '@/hooks/useInterests';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+export function NewsFilters() {
+  const { data: interests } = useInterests();
+  const [selectedTag, setSelectedTag] = useAtom(selectedTagAtom);
+  const [selectedDate, setSelectedDate] = useAtom(selectedDateAtom);
+
+  return (
+    &lt;div className="space-y-4"&gt;
+      {/* タグフィルタ */}
+      &lt;div&gt;
+        &lt;Label className="text-sm text-muted-foreground"&gt;タグで絞り込み&lt;/Label&gt;
+        &lt;div className="mt-1 flex flex-wrap gap-2"&gt;
+          &lt;Button
+            variant={selectedTag === undefined ? 'default' : 'outline'}
+            size="sm"
+            onClick={() =&gt; setSelectedTag(undefined)}
+          &gt;
+            すべて
+          &lt;/Button&gt;
+          {interests?.map((interest) =&gt; (
+            &lt;Button
+              key={interest.keyword}
+              variant={selectedTag === interest.keyword ? 'default' : 'outline'}
+              size="sm"
+              onClick={() =&gt; setSelectedTag(interest.keyword)}
+            &gt;
+              {interest.keyword}
+            &lt;/Button&gt;
+          ))}
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      {/* 日付フィルタ */}
+      &lt;div className="flex items-center gap-2"&gt;
+        &lt;Label htmlFor="date-filter" className="text-sm text-muted-foreground"&gt;
+          日付で絞り込み
+        &lt;/Label&gt;
+        &lt;Input
+          id="date-filter"
+          type="date"
+          className="w-auto"
+          value={selectedDate || ''}
+          onChange={(e) =&gt; setSelectedDate(e.target.value || undefined)}
+        /&gt;
+        {selectedDate &amp;&amp; (
+          &lt;Button variant="ghost" size="sm" onClick={() =&gt; setSelectedDate(undefined)}&gt;
+            クリア
+          &lt;/Button&gt;
+        )}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+    <div class="why-box">
+      <strong>Interest一覧をタグフィルタに再利用:</strong> ユーザーが登録したInterest（React, Rails, AWSなど）がそのままタグフィルタのボタンになる。Interest CRUDで追加/削除するとフィルタボタンも自動で同期される（TanStack Queryのキャッシュが共有されるため）。
+    </div>
+
+    <h3>NewsList（ニュース一覧）</h3>
+
+    <div class="file-label">frontend/src/components/news/NewsList.tsx</div>
+    <pre><code>import { useAtom } from 'jotai';
+import { selectedDateAtom, selectedTagAtom } from '@/store/filters';
+import { useNewsList } from '@/hooks/useNews';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+export function NewsList() {
+  const [selectedDate] = useAtom(selectedDateAtom);
+  const [selectedTag] = useAtom(selectedTagAtom);
+  const { data: news, isLoading } = useNewsList({
+    date: selectedDate,
+    tag: selectedTag,
+  });
+
+  if (isLoading) {
+    return &lt;p className="text-sm text-muted-foreground"&gt;読み込み中...&lt;/p&gt;;
+  }
+
+  if (!news || news.length === 0) {
+    return &lt;p className="text-sm text-muted-foreground"&gt;ニュースがありません&lt;/p&gt;;
+  }
+
+  return (
+    &lt;div className="space-y-3"&gt;
+      {news.map((item) =&gt; (
+        &lt;Card key={item.id}&gt;
+          &lt;CardHeader className="pb-2"&gt;
+            &lt;div className="flex items-center justify-between"&gt;
+              &lt;CardTitle className="text-base"&gt;
+                &lt;a href={item.url} target="_blank" rel="noopener noreferrer"
+                   className="hover:underline"&gt;
+                  {item.title}
+                &lt;/a&gt;
+              &lt;/CardTitle&gt;
+              &lt;span className="rounded bg-muted px-2 py-0.5 text-xs"&gt;
+                {item.tag}
+              &lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/CardHeader&gt;
+          &lt;CardContent className="pt-0"&gt;
+            &lt;p className="text-xs text-muted-foreground"&gt;
+              {new Date(item.published_at).toLocaleDateString('ja-JP')}
+            &lt;/p&gt;
+          &lt;/CardContent&gt;
+        &lt;/Card&gt;
+      ))}
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+    <h3>NewsDetailPage（詳細画面）</h3>
+
+    <div class="pattern-tabs" data-group="detail">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('detail', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('detail', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="detail" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+
+      <div class="file-label">frontend/src/pages/NewsDetailPage.tsx</div>
+      <pre><code>import { useParams, Link } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type { NewsDetail } from '@/types/news';
+
+export function NewsDetailPage() {
+  const { id } = useParams&lt;{ id: string }&gt;();
+  const { data: news, isLoading } = useQuery({
+    queryKey: ['news', Number(id)],
+    queryFn: () =&gt; api&lt;NewsDetail&gt;(`/news/${id}`),
+  });
+
+  // ...表示部分は共通
+}</code></pre>
+    </div>
+
+    <div class="pattern-content" data-group="detail" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+
+      <div class="file-label">frontend/src/pages/NewsDetailPage.tsx</div>
+      <pre><code>import { useParams, Link } from 'react-router';
+import { useNewsDetail } from '@/hooks/useNews';
+
+export function NewsDetailPage() {
+  const { id } = useParams&lt;{ id: string }&gt;();
+  const { data: news, isLoading } = useNewsDetail(Number(id!));
+
+  // ...表示部分は共通
+}</code></pre>
+    </div>
+
+    <h3>表示部分（両パターン共通）</h3>
+
+    <pre><code>  if (isLoading) {
+    return &lt;div className="p-8"&gt;読み込み中...&lt;/div&gt;;
+  }
+
+  if (!news) {
+    return &lt;div className="p-8"&gt;ニュースが見つかりません&lt;/div&gt;;
+  }
+
+  return (
+    &lt;div className="mx-auto max-w-3xl px-4 py-8"&gt;
+      &lt;Link to="/dashboard" className="text-sm text-muted-foreground hover:underline"&gt;
+        ← ダッシュボードに戻る
+      &lt;/Link&gt;
+      &lt;h1 className="mt-4 text-2xl font-bold"&gt;{news.title}&lt;/h1&gt;
+      &lt;div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground"&gt;
+        &lt;span className="rounded bg-muted px-2 py-0.5 text-xs"&gt;{news.tag}&lt;/span&gt;
+        &lt;span&gt;{new Date(news.published_at).toLocaleDateString('ja-JP')}&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div className="mt-6 leading-relaxed"&gt;{news.text}&lt;/div&gt;
+      &lt;a href={news.url} target="_blank" rel="noopener noreferrer"
+         className="mt-4 inline-block text-sm text-primary hover:underline"&gt;
+        元の記事を読む →
+      &lt;/a&gt;
+    &lt;/div&gt;
+  );</code></pre>
+
+    <!-- ===== 4-9. ルーティング ===== -->
+    <h2>4-9. フロントエンド: ルーティング更新 <span class="section-tag tag-react">React</span></h2>
+
+    <div class="file-label">frontend/src/App.tsx（変更部分）</div>
+    <pre><code>import { NewsDetailPage } from '@/pages/NewsDetailPage';
+
+// AuthGuard 内に追加:
+&lt;Route element={&lt;AuthGuard /&gt;}&gt;
+  &lt;Route path="/dashboard" element={&lt;DashboardPage /&gt;} /&gt;
+  &lt;Route path="/news/:id" element={&lt;NewsDetailPage /&gt;} /&gt;
+&lt;/Route&gt;</code></pre>
+
+    <!-- ===== 4-10. DashboardPage ===== -->
+    <h2>4-10. フロントエンド: DashboardPage レイアウト <span class="section-tag tag-react">React</span></h2>
+
+    <p>DashboardPageのレイアウトを再構成。メインエリアにニュース一覧+フィルタ、サイドにプロフィール+Interest管理。</p>
+
+    <div class="file-label">frontend/src/pages/DashboardPage.tsx（構成イメージ）</div>
+    <pre><code>import { NewsFilters } from '@/components/news/NewsFilters';
+import { NewsList } from '@/components/news/NewsList';
+import { InterestList } from '@/components/interests/InterestList';
+
+export function DashboardPage() {
+  // ... header部分は既存のまま ...
+
+  return (
+    &lt;div className="min-h-screen bg-background"&gt;
+      &lt;header&gt;{/* 既存のヘッダー */}&lt;/header&gt;
+
+      &lt;main className="mx-auto max-w-6xl px-4 py-8"&gt;
+        &lt;div className="grid gap-6 lg:grid-cols-3"&gt;
+          {/* 左カラム: ニュース（2/3幅） */}
+          &lt;div className="space-y-6 lg:col-span-2"&gt;
+            &lt;NewsFilters /&gt;
+            &lt;NewsList /&gt;
+          &lt;/div&gt;
+
+          {/* 右カラム: プロフィール + Interest（1/3幅） */}
+          &lt;div className="space-y-4"&gt;
+            &lt;Card&gt;{/* プロフィール */}&lt;/Card&gt;
+            &lt;Card&gt;
+              &lt;CardHeader&gt;
+                &lt;CardTitle&gt;興味・関心キーワード&lt;/CardTitle&gt;
+              &lt;/CardHeader&gt;
+              &lt;CardContent&gt;
+                &lt;InterestList /&gt;
+              &lt;/CardContent&gt;
+            &lt;/Card&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/main&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+    <div class="flow-diagram">
+【DashboardPage のデータフロー】
+
+  Jotai atoms              TanStack Query           Rails API
+  ────────────────────────────────────────────────────────────
+  selectedTagAtom: 'React'
+  selectedDateAtom: undefined
+        │
+        ├→ useNewsList({ tag: 'React' })
+        │   └→ GET /api/v1/news?tag=React ──→ フィルタ済み一覧
+        │                                     ← 200 OK
+        │   └→ NewsList に表示
+        │
+        └→ useInterests()
+            └→ GET /api/v1/interests ─────→ Interest一覧
+                                            ← 200 OK
+            └→ NewsFilters のタグボタンに表示
+            └→ InterestList に表示（同じキャッシュを共有）</div>
+
+    <!-- ===== 4-11. ファイル構成 ===== -->
+    <h2>4-11. Step 4 で追加・変更するファイル一覧</h2>
+
+    <div class="pattern-tabs" data-group="files">
+      <button class="pattern-tab tab-manual active" onclick="switchTab('files', 'manual')">手動パターン</button>
+      <button class="pattern-tab tab-openapi" onclick="switchTab('files', 'openapi')">OpenAPIパターン</button>
+    </div>
+
+    <div class="pattern-content active" data-group="files" data-tab="manual">
+      <span class="pattern-label label-manual">手動パターン</span>
+      <pre><code>frontend/src/
+├── types/
+│   └── news.ts          ← NewsSummary, NewsDetail 型定義（手書き）
+├── hooks/
+│   └── useNews.ts       ← useQuery + api() で手動フェッチ
+├── store/
+│   └── filters.ts       ← Jotai atoms（共通）
+├── components/news/
+│   ├── NewsFilters.tsx   ← フィルタUI（共通）
+│   └── NewsList.tsx      ← ニュース一覧（共通）
+├── pages/
+│   ├── DashboardPage.tsx ← レイアウト再構成（共通）
+│   └── NewsDetailPage.tsx ← useQuery + api() で手動フェッチ
+└── App.tsx              ← ルーティング追加（共通）</code></pre>
+    </div>
+
+    <div class="pattern-content" data-group="files" data-tab="openapi">
+      <span class="pattern-label label-openapi">OpenAPIパターン</span>
+      <pre><code>frontend/src/
+├── hooks/
+│   └── useNews.ts       ← $api.useQuery で型安全フェッチ
+├── store/
+│   └── filters.ts       ← Jotai atoms（共通）
+├── components/news/
+│   ├── NewsFilters.tsx   ← フィルタUI（共通）
+│   └── NewsList.tsx      ← ニュース一覧（共通）
+├── pages/
+│   ├── DashboardPage.tsx ← レイアウト再構成（共通）
+│   └── NewsDetailPage.tsx ← useNewsDetail で型安全フェッチ
+└── App.tsx              ← ルーティング追加（共通）
+
+※ types/news.ts は不要（OpenAPIから自動生成）</code></pre>
+    </div>
+
+    <h2>4-12. 動作確認チェックリスト</h2>
     <ol>
       <li>ダッシュボードにニュース一覧が表示される</li>
       <li>カレンダーで日付選択 → その日のニュースだけ表示される</li>
@@ -367,5 +779,14 @@ const { data: news, isLoading } = $api.useQuery(
       <a href="step5-background-jobs.html">Step 5: バックグラウンドジョブ →</a>
     </div>
   </div>
+
+  <script>
+    function switchTab(group, tab) {
+      document.querySelectorAll(`.pattern-tab[onclick*="'${group}'"]`).forEach(el => el.classList.remove('active'));
+      document.querySelectorAll(`.pattern-content[data-group="${group}"]`).forEach(el => el.classList.remove('active'));
+      document.querySelector(`.pattern-tab[onclick*="'${group}', '${tab}'"]`).classList.add('active');
+      document.querySelector(`.pattern-content[data-group="${group}"][data-tab="${tab}"]`).classList.add('active');
+    }
+  </script>
 </body>
 </html>

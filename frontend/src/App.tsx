@@ -5,6 +5,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { SignInPage } from "@/pages/SignInPage";
 import { SignUpPage } from "@/pages/SignUpPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { NewsDetailPage } from "@/pages/NewsDetailPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,6 +22,7 @@ function App() {
           <Route path="/sign-up" element={<SignUpPage />} />
           <Route element={<AuthGuard />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/news/:id" element={<NewsDetailPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
